@@ -1,10 +1,10 @@
-# Codex Task Router
+# Task Router
 
-用一个 `routing.toml` 为 Codex 原生子 Agent 配置不同的模型和思考强度（effort），由主 Agent 按任务选择。
+用一个 `routing.toml` 为 Codex 原生子 Agent 或 Pi 的 `pi-subagents` 配置不同的模型和思考强度（effort / thinking），由主 Agent 按任务选择。
 
-coding 完成实现后，由 verify 独立验收。安装器生成独立 profile、角色配置和按需加载的 Skill，并行任务复用 Codex 原生子 Agent 与 worktree 能力。
+coding 完成实现后，由 verify 独立验收。安装器为每个后端生成独立的 profile、角色配置和按需加载的 Skill：Codex 复用原生子 Agent 与 worktree，Pi 通过 `pi-subagents` 执行 Router 自己的 `tr_*` 角色，不覆盖 Pi 内置角色。
 
-[快速开始](#快速开始) · [配置角色](#配置角色) · [配置参考](docs/configuration.md) · [Pi / pi-subagents 适配](docs/pi.md)
+[Codex 快速开始](#codex-快速开始) · [配置角色](#配置角色) · [配置参考](docs/configuration.md) · [Pi / pi-subagents 适配](docs/pi.md)
 
 ## Pi / pi-subagents
 
@@ -21,7 +21,7 @@ node cli.mjs install --host pi --apply  # 应用
 
 原有命令默认仍使用 Codex 后端；以下快速开始针对 Codex。
 
-## 快速开始
+## Codex 快速开始
 
 需要 Node.js 22+、支持命名 subagent 角色和独立 profile 的 Codex，以及已配置好的模型 provider。
 
@@ -105,6 +105,8 @@ options = [
 
 具体任务如何选档，可读 `routing.toml` 中各候选的 `when` 和 [Skill](skill/SKILL.md)。并行协作方式见[并行工作参考](skill/references/parallel-work.md)。
 
+上述角色与候选在两后端共用。Pi 的 `effort` 到 thinking 映射、provider 写法和派发差异见 [Pi 适配](docs/pi.md#角色与模型派发)。
+
 ## 日常使用与更新
 
 在路由会话中直接描述任务即可，主 Agent 按需要分工。
@@ -130,7 +132,7 @@ options = [
 | `node cli.mjs doctor` | 单独检查配置与模型目录 |
 | `node cli.mjs build` | 生成独立 bundle，默认输出到 `dist/` |
 
-`doctor` 静态校验主模型和所有候选的模型 ID、effort 与 provider，具体边界见[检查范围](docs/configuration.md#检查范围)，参数选项见 [CLI 参数](docs/configuration.md#cli-参数)。
+以上命令默认 `--host codex`；Pi 后端加 `--host pi` 并使用 `--pi-home`，见 [Pi 配置说明](docs/pi.md)。`doctor` 静态校验主模型和所有候选的模型 ID、effort 与 provider，具体边界见[检查范围](docs/configuration.md#检查范围)，参数选项见 [CLI 参数](docs/configuration.md#cli-参数)。
 
 开发检查与构建：
 
