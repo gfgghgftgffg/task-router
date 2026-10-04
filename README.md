@@ -4,7 +4,22 @@
 
 coding 完成实现后，由 verify 独立验收。安装器生成独立 profile、角色配置和按需加载的 Skill，并行任务复用 Codex 原生子 Agent 与 worktree 能力。
 
-[快速开始](#快速开始) · [配置角色](#配置角色) · [配置参考](docs/configuration.md)
+[快速开始](#快速开始) · [配置角色](#配置角色) · [配置参考](docs/configuration.md) · [Pi / pi-subagents 适配](docs/pi.md)
+
+## Pi / pi-subagents
+
+同一份角色契约和模型候选也可安装到 Pi，由 `pi-subagents` 执行 Router 自己的 `tr_*` 角色，不复用或覆盖 Pi 内置角色：
+
+```sh
+pi install npm:pi-subagents
+pi install npm:pi-web-access
+node cli.mjs install --host pi          # 预览
+node cli.mjs install --host pi --apply  # 应用
+```
+
+在工作项目中启动 Pi 或执行 `/reload`，再显式调用 `/skill:task-routing 你的任务`。安装不自动激活，不改主模型、`settings.json` 或认证。思考支持、工具边界、自定义目录和并发差异见 [Pi 配置说明](docs/pi.md)。独立构建使用 `node cli.mjs build --host pi`，默认输出 `dist/pi/`。
+
+原有命令默认仍使用 Codex 后端；以下快速开始针对 Codex。
 
 ## 快速开始
 
@@ -124,4 +139,4 @@ npm test
 npm run build
 ```
 
-职责契约在 [`roles/`](roles/)，编排入口及参考材料在 [`skill/`](skill/)，配置生成和安装逻辑在 [`src/router.mjs`](src/router.mjs)。
+职责契约在 [`roles/`](roles/)，编排入口及参考材料在 [`skill/`](skill/)，Codex 配置生成和共享安装逻辑在 [`src/router.mjs`](src/router.mjs)，Pi 后端在 [`src/pi.mjs`](src/pi.mjs)。
