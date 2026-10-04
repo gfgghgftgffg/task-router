@@ -2,6 +2,8 @@
 
 [返回 README](../README.md)
 
+本页针对 Codex 后端。命令默认 `--host codex`，保持原有行为；Pi 安装、thinking 映射和 pi-subagents 派发规则见 [Pi 适配](pi.md)。
+
 ## 模型目录与 V1 兼容
 
 本项目使用 V1 子 Agent 通讯。先将 README 中的功能开关合并到基础 `config.toml`，再检查自定义模型目录。

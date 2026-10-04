@@ -232,17 +232,18 @@ export function inspectCatalog(c, codexHome, catalogOverride) {
   return { errors, warnings, rows, catalogPath };
 }
 
-export function mergeAgents(existing, block) {
-  const starts = existing.split(START).length - 1;
-  const ends = existing.split(END).length - 1;
+export function mergeAgents(existing, block, markers = { start: START, end: END }) {
+  const { start: startMarker, end: endMarker } = markers;
+  const starts = existing.split(startMarker).length - 1;
+  const ends = existing.split(endMarker).length - 1;
   assert(starts === ends && starts <= 1, 'AGENTS.md contains ambiguous task-router markers');
   if (!starts) return existing + (existing && !existing.endsWith('\n') ? '\n' : '') + (existing ? '\n' : '') + block;
-  const start = existing.indexOf(START), end = existing.indexOf(END);
+  const start = existing.indexOf(startMarker), end = existing.indexOf(endMarker);
   assert(end > start, 'AGENTS.md task-router markers are out of order');
-  return existing.slice(0, start) + block.trimEnd() + existing.slice(end + END.length);
+  return existing.slice(0, start) + block.trimEnd() + existing.slice(end + endMarker.length);
 }
 
-function safeTarget(root, relative) {
+export function safeTarget(root, relative) {
   assert(!path.isAbsolute(relative) && !relative.split(/[\\/]/).some(p => p === '..' || p === ''), `Unsafe managed path: ${relative}`);
   const resolvedRoot = path.resolve(root);
   const target = path.resolve(resolvedRoot, relative);
@@ -270,7 +271,10 @@ function writeAtomic(target, content) {
 const CANDIDATE_PATH = new RegExp(`^agents/task-routing/(?:${Object.keys(ROLE_META).join('|')})_[a-z][a-z0-9_-]*\\.toml$`);
 
 export function planInstall(files, home, options = {}) {
-  const manifestPath = safeTarget(home, MANIFEST);
+  const manifestRelative = options.manifestPath ?? MANIFEST;
+  const manifestPath = safeTarget(home, manifestRelative);
+  const stalePattern = options.stalePattern ?? CANDIDATE_PATH;
+  const mergeInstructions = options.mergeAgents ?? mergeAgents;
   const base = options.base ?? readBaseInstructions(home);
   // The base config and every managed target are captured as preimages, so a plan
   // that would write nothing is still rejected once anything it read has changed.
@@ -288,7 +292,7 @@ export function planInstall(files, home, options = {}) {
     const old = exists ? read(target) : undefined;
     guards.push({ target, old, label: 'Managed file' });
     let content = generated;
-    if (relative === 'AGENTS.md') content = mergeAgents(old || '', generated);
+    if (relative === 'AGENTS.md') content = mergeInstructions(old || '', generated);
     else if (exists && old !== generated) {
       assert(previous.files[relative] && hash(old) === previous.files[relative], `Preserving unowned or edited file: ${target}`);
     }
@@ -297,11 +301,10 @@ export function planInstall(files, home, options = {}) {
   }
   for (const relative of Object.keys(previous.files)) {
     if (files.has(relative)) continue;
-    // Removing a named candidate is the one managed deletion this installer supports. It
-    // stays restricted to this project's role_<id>.toml namespace and to files whose
-    // recorded hash is unchanged, so base roles, edited files, and unowned paths are never
-    // removed.
-    assert(CANDIDATE_PATH.test(relative), `Previously managed path would become stale: ${relative}. Keep the profile name stable or use a separate Codex home.`);
+    // Removing a named candidate is the one managed deletion this installer supports.
+    // Each backend restricts deletion to its role_<id> namespace and unchanged
+    // recorded hashes, so base roles, edited files, and unowned paths are never removed.
+    assert(stalePattern.test(relative), `Previously managed path would become stale: ${relative}. Keep the profile name stable or use a separate host home.`);
     const target = safeTarget(home, relative);
     const old = fs.existsSync(target) ? read(target) : undefined;
     if (old === undefined) {
@@ -316,7 +319,7 @@ export function planInstall(files, home, options = {}) {
   const manifest = JSON.stringify({ version: 1, files: hashes }, null, 2) + '\n';
   const oldManifest = fs.existsSync(manifestPath) ? read(manifestPath) : undefined;
   guards.push({ target: manifestPath, old: oldManifest, label: 'Managed file' });
-  if (manifest !== oldManifest) changes.push({ relative: MANIFEST, target: manifestPath, content: manifest, old: oldManifest });
+  if (manifest !== oldManifest) changes.push({ relative: manifestRelative, target: manifestPath, content: manifest, old: oldManifest });
   Object.defineProperty(changes, 'guards', { value: guards });
   return changes;
 }
