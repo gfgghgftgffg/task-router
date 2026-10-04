@@ -90,7 +90,7 @@ provider 可在 `orchestrator`、角色默认候选或单个 `options` 项上设
 | `.task-router/manifest.json` | 记录托管文件及其 hash，用于后续更新检查 |
 | `.task-router/backups/` | 修改或删除已有文件前保存备份 |
 
-已有 `config.toml`、认证、其他 Skills、其他角色文件和 `AGENTS.md` 标记之外的内容不会被改写。基础配置只用于读取指令快照和校验配置。长期自定义的 AGENTS 规则应放在 `codex-task-router:start/end` 区块外，区块内会随生成器更新。
+已有 `config.toml`、认证、其他 Skills、其他角色文件和 `AGENTS.md` 标记之外的内容不会被改写。基础配置只用于读取指令快照和校验配置。长期自定义的 AGENTS 规则应放在 `task-router:start/end` 区块外，区块内会随生成器更新。早期版本写入的 `codex-task-router:start/end` 区块会在下次安装时就地替换为新标记，不会留下重复区块。
 
 profile 和角色配置按整个文件管理，不合并其中手工添加的 `[tui]` 等设置。已有文件与生成内容不同时，只有其 hash 仍匹配安装记录才允许更新；未托管或手改文件会触发拒绝覆盖。即使额外设置已被纳入安装记录，重新生成仍可能移除它们。遇到冲突先核对差异并备份需要保留的内容；删除 manifest 会丢失保护所需记录。直接恢复额外设置后，下一次更新仍可能发生冲突。
 
@@ -116,7 +116,7 @@ profile 和角色配置按整个文件管理，不合并其中手工添加的 `[
 
 显式调用 `$task-routing` 只让当前会话使用 Skill 政策，不能改变当前主模型，也不能让未加载的角色、模型或工具自动可用。需要完整角色配置时，在新会话中加载 profile。
 
-当前没有自动卸载命令。手动移除时，根据安装目标中的 manifest 核对文件，仅移除本项目的 profile、`agents/task-routing/` 候选、`skills/task-routing/` 和安装记录；`AGENTS.md` 只移除 `codex-task-router:start/end` 标记及其区块，保留其他内容。备份目录可按是否还需恢复自行保留或移除，不要删除整个 Codex home 或基础 `config.toml`。
+当前没有自动卸载命令。手动移除时，根据安装目标中的 manifest 核对文件，仅移除本项目的 profile、`agents/task-routing/` 候选、`skills/task-routing/` 和安装记录；`AGENTS.md` 只移除 `task-router:start/end` 标记及其区块，保留其他内容。若安装停留在旧版本，旧区块使用 `codex-task-router:start/end`。备份目录可按是否还需恢复自行保留或移除，不要删除整个 Codex home 或基础 `config.toml`。
 
 ## 检查范围
 

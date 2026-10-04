@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parse, stringify } from 'smol-toml';
-import { ROOT, ROLE_META, loadConfig, render, inspectCatalog, mergeAgents, planInstall, applyInstall, activationInstructions, readBaseInstructions } from '../src/router.mjs';
+import { ROOT, ROLE_META, loadConfig, render, inspectCatalog, mergeAgents, LEGACY_MARKERS, planInstall, applyInstall, activationInstructions, readBaseInstructions } from '../src/router.mjs';
 
 const defaultConfig = () => loadConfig(path.join(ROOT, 'routing.toml'));
 // Older coverage describes the single-candidate layout. Keep it on an explicit
@@ -154,11 +154,43 @@ test('a stale plan cannot overwrite concurrent changes', t => {
 });
 
 test('ambiguous AGENTS markers and stale profile renames fail explicitly', t => {
-  assert.throws(() => mergeAgents('<!-- codex-task-router:start -->', 'x'), /ambiguous/);
+  assert.throws(() => mergeAgents('<!-- task-router:start -->', 'x'), /ambiguous/);
+  assert.throws(() => mergeAgents('<!-- task-router:start -->\n<!-- task-router:end -->\n<!-- task-router:start -->\n<!-- task-router:end -->', 'x'), /ambiguous|more than one/);
   const dir = fixture(t), c = legacyConfig();
   applyInstall(planInstall(render(c), dir), dir);
   c.profile = 'renamed';
   assert.throws(() => planInstall(render(c), dir), /stale/);
+});
+
+test('the renamed AGENTS marker replaces the block written by earlier versions', () => {
+  const markers = { start: '<!-- task-router:start -->', end: '<!-- task-router:end -->' };
+  const existing = 'User rules first.\n\n<!-- codex-task-router:start -->\nOld managed block.\n<!-- codex-task-router:end -->\n\nUser rules last.\n';
+  const merged = mergeAgents(existing, '<!-- task-router:start -->\nNew block.\n<!-- task-router:end -->\n', markers, LEGACY_MARKERS);
+  assert.ok(merged.startsWith('User rules first.'));
+  assert.ok(merged.includes('User rules last.'));
+  assert.ok(merged.includes('New block.'));
+  assert.equal(merged.includes('Old managed block.'), false);
+  assert.equal(merged.includes('codex-task-router'), false);
+  assert.equal(merged.split(markers.start).length - 1, 1);
+  // A home that already migrated must not gain a second block on the next install.
+  const again = mergeAgents(merged, '<!-- task-router:start -->\nNewer block.\n<!-- task-router:end -->\n', markers, LEGACY_MARKERS);
+  assert.equal(again.split(markers.start).length - 1, 1);
+  assert.ok(again.includes('Newer block.'));
+  assert.ok(again.includes('User rules first.'));
+  // Two managed blocks are ambiguous rather than silently merged.
+  assert.throws(() => mergeAgents(`${existing}\n${merged}`, 'x', markers, LEGACY_MARKERS), /more than one/);
+});
+
+test('an install migrates a legacy marker block in place and stays idempotent', t => {
+  const dir = fixture(t), c = legacyConfig(), files = render(c);
+  put(dir, 'AGENTS.md', 'Keep me.\n\n<!-- codex-task-router:start -->\nstale\n<!-- codex-task-router:end -->\n');
+  applyInstall(planInstall(files, dir), dir);
+  const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+  assert.ok(agents.startsWith('Keep me.'));
+  assert.equal(agents.includes('codex-task-router'), false);
+  assert.equal(agents.includes('stale'), false);
+  assert.equal(agents.split('<!-- task-router:start -->').length - 1, 1);
+  assert.equal(planInstall(files, dir).filter(change => change.relative === 'AGENTS.md').length, 0);
 });
 
 test('unsafe manifest paths are rejected without writing outside the target', t => {
@@ -240,7 +272,7 @@ test('activation lives only in the generated profile and follows custom profile 
     assert.equal(content.includes(activation), false, `activation leaked into ${relative}`);
   }
   const agents = files.get('AGENTS.md');
-  assert.ok(agents.includes('<!-- codex-task-router:start -->'));
+  assert.ok(agents.includes('<!-- task-router:start -->'));
   assert.ok(agents.includes('When the task-routing profile is active or the user invokes $task-routing'));
   assert.ok(agents.includes('Otherwise keep the existing workflow.'));
   const dir = fixture(t);

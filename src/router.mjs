@@ -13,8 +13,12 @@ export const ROLE_META = {
   reasoning: { description: 'Resolve a bounded difficult decision or independent high-risk review; no coding.', sandbox: 'read-only' },
   general: { description: 'Produce non-coding summaries, prose, structured information, and analysis.', sandbox: 'workspace-write' },
 };
-const START = '<!-- codex-task-router:start -->';
-const END = '<!-- codex-task-router:end -->';
+const START = '<!-- task-router:start -->';
+const END = '<!-- task-router:end -->';
+// Blocks written before the rename still have to be recognised. Otherwise a new
+// marker would append a second managed block and leave the old one behind in every
+// Codex home that already had one.
+export const LEGACY_MARKERS = [{ start: '<!-- codex-task-router:start -->', end: '<!-- codex-task-router:end -->' }];
 const MANIFEST = '.task-router/manifest.json';
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
 const read = p => fs.readFileSync(p, 'utf8');
@@ -232,15 +236,23 @@ export function inspectCatalog(c, codexHome, catalogOverride) {
   return { errors, warnings, rows, catalogPath };
 }
 
-export function mergeAgents(existing, block, markers = { start: START, end: END }) {
+function markerSpan(existing, markers) {
   const { start: startMarker, end: endMarker } = markers;
   const starts = existing.split(startMarker).length - 1;
   const ends = existing.split(endMarker).length - 1;
   assert(starts === ends && starts <= 1, 'AGENTS.md contains ambiguous task-router markers');
-  if (!starts) return existing + (existing && !existing.endsWith('\n') ? '\n' : '') + (existing ? '\n' : '') + block;
+  if (!starts) return undefined;
   const start = existing.indexOf(startMarker), end = existing.indexOf(endMarker);
   assert(end > start, 'AGENTS.md task-router markers are out of order');
-  return existing.slice(0, start) + block.trimEnd() + existing.slice(end + endMarker.length);
+  return { start, end: end + endMarker.length };
+}
+
+export function mergeAgents(existing, block, markers = { start: START, end: END }, legacy = []) {
+  const spans = [markerSpan(existing, markers), ...legacy.map(m => markerSpan(existing, m))].filter(Boolean);
+  assert(spans.length <= 1, 'AGENTS.md contains more than one managed task-router block');
+  if (!spans.length) return existing + (existing && !existing.endsWith('\n') ? '\n' : '') + (existing ? '\n' : '') + block;
+  const { start, end } = spans[0];
+  return existing.slice(0, start) + block.trimEnd() + existing.slice(end);
 }
 
 export function safeTarget(root, relative) {
@@ -274,7 +286,7 @@ export function planInstall(files, home, options = {}) {
   const manifestRelative = options.manifestPath ?? MANIFEST;
   const manifestPath = safeTarget(home, manifestRelative);
   const stalePattern = options.stalePattern ?? CANDIDATE_PATH;
-  const mergeInstructions = options.mergeAgents ?? mergeAgents;
+  const mergeInstructions = options.mergeAgents ?? ((existing, block) => mergeAgents(existing, block, { start: START, end: END }, LEGACY_MARKERS));
   const base = options.base ?? readBaseInstructions(home);
   // The base config and every managed target are captured as preimages, so a plan
   // that would write nothing is still rejected once anything it read has changed.
