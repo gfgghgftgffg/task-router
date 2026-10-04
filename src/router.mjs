@@ -313,9 +313,9 @@ export function planInstall(files, home, options = {}) {
   }
   for (const relative of Object.keys(previous.files)) {
     if (files.has(relative)) continue;
-    // Removing a named candidate is the one managed deletion this installer supports.
-    // Each backend restricts deletion to its role_<id> namespace and unchanged
-    // recorded hashes, so base roles, edited files, and unowned paths are never removed.
+    // Removing candidates, and a backend's explicitly declared legacy layout,
+    // are the only managed deletions. Each backend restricts its own namespace
+    // and requires unchanged recorded hashes; edited/unowned paths are never removed.
     assert(stalePattern.test(relative), `Previously managed path would become stale: ${relative}. Keep the profile name stable or use a separate host home.`);
     const target = safeTarget(home, relative);
     const old = fs.existsSync(target) ? read(target) : undefined;

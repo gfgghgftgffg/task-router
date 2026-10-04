@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Configurable task roles and model routing for Codex and Pi/pi-subagents",
+  "description": "Configurable task roles and model routing for Codex and Pi/pi-subagents-lean",
   "engines": { "node": ">=22" },
   "scripts": {
     "build": "node cli.mjs build",

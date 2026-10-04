@@ -7,7 +7,7 @@ Task Router 用一个 `routing.toml` 定义一个 orchestrator 和五个职责�
 | 宿主 | 执行方式 | 安装产物 |
 | --- | --- | --- |
 | Codex | 原生子 Agent（V1 通讯），并行任务复用 worktree | 独立 profile、TOML 角色、按需加载的 Skill |
-| [pi-subagents](https://github.com/nicobailon/pi-subagents) | Router 自己的 `tr_*` 角色，经 pi-subagents 派发，不覆盖 Pi 内置角色 | Markdown 角色、按需加载的 Skill |
+| Pi + [pi-subagents-lean](https://github.com/kunkun9527/pi-subagents-lean) | Router 自己的 `tr_*` 角色，经 lean 门面和 [tintinweb 引擎](https://github.com/tintinweb/pi-subagents)派发，不覆盖内置角色 | 扁平 Markdown 角色、按需加载的 Skill |
 
 安装器只写自己管理的文件：默认先预览，`--apply` 才写入，写入前做备份和并发校验。不改写 Codex 的 `config.toml`、Pi 的 `settings.json`，也不碰认证和 provider 配置。
 
@@ -56,14 +56,17 @@ npm ci
 
 ### Pi
 
-1. 安装执行与联网检索依赖（本仓库不代装）：
+1. 安装执行与联网检索依赖（本仓库不代装）。如果已安装旧 `pi-subagents`，先移除，避免同名工具冲突：
 
    ```sh
-   pi install npm:pi-subagents
-   pi install npm:pi-web-access
+   pi remove npm:pi-subagents             # 仅旧版用户需要
+   pi install npm:@ssk_dev/pi-subagents-lean@0.19.4
+   pi install npm:@ssk_dev/pi-web-access-lean
    ```
 
-2. 编辑同一个 [`routing.toml`](routing.toml)。Pi 的 provider 写法、`effort` 到 thinking 的映射和派发规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
+   lean 版依赖 `@tintinweb/pi-subagents`，不是原插件的轻量模式。插件替换后先 `/reload` 或重启 Pi；不要同时加载多个 subagents/web-access 门面。建议在 `~/.pi/agent/subagents.json` 合并 `"fallbackSubagent": "none"`、`"strictAgentFiles": true`、`"workflowsEnabled": true`，保留原有设置；安装器不代改这些选项。详见 [Pi 安装](docs/pi.md#安装)。
+
+2. 编辑同一个 [`routing.toml`](routing.toml)。Pi 的模型和强度保存在生成的角色映射中，每次派发都显式传入，角色 frontmatter 不锁死模型。provider、thinking 和临时覆盖规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
 
 3. 预览并安装：
 
@@ -80,7 +83,7 @@ npm ci
    /skill:task-routing 你的任务
    ```
 
-   安装本身不激活路由，也不改主模型、`settings.json` 或认证。独立构建用 `node cli.mjs build --host pi`，默认输出 `dist/pi/`。
+   安装本身不激活路由，也不改主模型、`settings.json` 或认证。旧版 `agents/task-routing/*.md` 会按 manifest 哈希迁到 `agents/tr_*.md`，未托管或人工修改的文件会阻止迁移，不会被覆盖。独立构建用 `node cli.mjs build --host pi`，默认输出 `dist/pi/`。
 
 ### 更新 routing.toml 后重新安装
 
@@ -123,7 +126,7 @@ options = [
 
 主模型、角色默认候选和可选候选都可设置 `provider = "已配置的-provider-id"`。Codex 的 `orchestrator` 省略 provider 时沿用现有配置，子角色省略时继承主会话 provider，不继承同角色默认候选的显式 provider；认证和服务地址继续使用已有 Codex 配置。Pi 的 provider 写法和继承规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
 
-具体任务如何选档，可读 `routing.toml` 中各候选的 `when` 和 [Skill](skill/SKILL.md)。并行协作方式见[并行工作参考](skill/references/parallel-work.md)。
+具体任务如何选档，可读 `routing.toml` 中各候选的 `when` 和对应 Skill：[Codex](skill/SKILL.md)、[Pi](skill/pi/SKILL.md)。并行协作参考也按宿主区分：[Codex](skill/references/parallel-work.md)、[Pi lean](skill/pi/execution.md)。
 
 ## 日常使用与更新
 

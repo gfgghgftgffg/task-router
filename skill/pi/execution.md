@@ -1,43 +1,64 @@
 # Pi execution
 
-Task Router delegates through the installed pi-subagents runtime. Read its installed `workflows` and `tool-reference` guides before composing a workflow; this file is routing guidance, not another scheduler or runner.
+Task Router executes through `@ssk_dev/pi-subagents-lean` over tintinweb's engine. This reference describes its native API, not a new scheduler. Inspect `subagent({ op: "help", input: "workflow" })` when the installed schema is unclear.
 
-## Workflow shape
+## Native workflow
 
-Use one enclosing `subagent` call with `workflow: true`, `async: true` and the configured `globalConcurrencyLimit` for multi-step or parallel work. Write one `js workflow` block in the same reply. Its script uses `await runs.run(key, { label, agent, model, task, ... })` for dependencies and `await runs.all([{ key, label, agent, model, task, ... }])` for independent children. Choose actual agents and exact models from [the role map](role-map.md) and runtime discovery; do not copy example IDs as if they were registered.
+Use one enclosing call:
 
-Keep stable machine keys separate from short verb + behavior labels. `runs.all` returns an ordered array, not a map. Await each child before reading `.output` or `.structuredOutput`; check `.ok` and errors rather than accepting prose as success. Use an explicit `return` for the aggregate result.
+```js
+subagent({
+  op: "workflow",
+  input: JSON.stringify({ script: "...", args: { /* JSON-shaped inputs */ } })
+});
+```
 
-Omit child `async` inside awaited workflow steps: they retain completed-result semantics and the runtime starts them in the background. Explicit child `async: true` returns a launch receipt, not a final result. Top-level workflow `async: true` is separate. Ordinary direct child launches also use `async: true`.
+The script starts with a pure-literal `export const meta = { name, description }`. Top-level await and return are supported. It has no filesystem, shell, imports, network, eval, random numbers or clock. All real work happens in its children. It uses:
 
-Use top-level await or plain helper functions. Do not define nested async functions/arrows/methods. The script has no filesystem, shell or arbitrary Pi tools; raw scripts cannot call `runs.host`. Do not invent legacy top-level `tasks`, `chain` or `parallel` inputs. If workflow scripts are disabled, report the unsupported route instead of silently changing the configured protocol.
+- `await agent(prompt, { agentType: "tr_...", model: "provider/exact-id", effort: "high", label: "unique-short-label" })` for a dependency;
+- `await parallel([() => agent(...), () => agent(...)])` for independent work;
+- `await pipeline(items, ...stages)` for per-item dependencies. Stages receive `(previousResult, originalItem, index)` and can overlap across items;
+- `phase(title)`, `log(message)` and `args` for organization. Declare used phases in meta; use the `phase` option inside concurrent stages to avoid ambient-phase races.
 
-Independent work may run concurrently. Keep the aggregate active children under the configured Router maximum and any stricter host ceiling. `globalConcurrencyLimit` caps children within one workflow, not the whole Pi session. Do not create agents merely to reach the limit or launch multiple competing coordinators.
+Always select the named candidate and both route fields from [the role map](role-map.md). Native workflow effort accepts minimal/low/medium/high/xhigh/max, but NOT off in upstream 0.19.0. An off route is valid for direct runs only: report unsupported workflow routing instead of dropping effort, inheriting a level or silently changing execution protocol. A missing `agentType` defaults to general-purpose. No `runs.run`, `runs.all`, `async`, `context`, `output`, `cwd`, `baseRef`, `globalConcurrencyLimit` or top-level Dynamic Workflows options belong to this API.
 
-## Ownership and isolation
+`agent()` returns final text (or a validated object with `schema`), NOT a receipt with `.ok/.output`. A terminal failure or user skip returns `null`; throws inside parallel/pipeline may also become null. Check every required result and stop dependent stages on null. Do not filter failed acceptance checks out and report a partial batch as success. Return a JSON-safe aggregate explicitly. A successful string is still not a verifier verdict; capture actual checks and independent acceptance.
 
-Keep one writer per shared cwd/worktree. A reader of content another child is changing depends on that writer. Independent concurrent writers need separate managed worktrees and distinct ownership.
+Workflows are always background. Do not add `run_in_background` to a workflow or `async` to its children. Keep all agent promises observed and awaited; the runtime rejects un-awaited children. Inspect native runs in `/agents → Workflows`; the facade's result/steer operations address direct agents, not workflow IDs.
 
-Use pi-subagents `worktree: true` only when isolation is needed and the source is clean. `baseRef` supports `HEAD` or a named ref, not a full commit hash or a revision expression. Consume the returned patch/handoff and artifact references; do not drop isolation or run manual destructive cleanup after a setup failure. The parent owns integration and affected acceptance checks.
+## Concurrency and ownership
 
-Bind durable child reports with `output` on `runs.run`/`runs.all`, not just a filename in task prose. Prefer managed relative outputs; return the actual `outputReference`, `outputPathMapping` or `artifactPaths`. Read-only children can return text for the runtime to persist without gaining write tools.
+The engine caps each native workflow at `max(1, min(16, cpus - 2))`, independently of the session's `subagents.json maxConcurrent` pool. Router cannot set that cap through a tool argument. To enforce a smaller Router maximum, process bounded chunks and await each batch before launching the next. Bound pipeline item batches too: overlapping stages still count as live children. Never create multiple competing enclosing workflows or use nested delegation to bypass a cap.
 
-## Context and continuity
+Direct background agents also obey the engine's session maxConcurrent (default 10). Keep aggregate Router work under its own configured maximum and any stricter host limit. These pools are not Codex's session-wide thread limit.
 
-Independent tasks start fresh with sufficient briefs. Fork is a parent snapshot, not live sharing of sibling histories. Keep implementation and verification independent.
+Keep one writer per shared cwd/worktree. Readers of changing content depend on the writer. Independent concurrent writers need managed worktrees with distinct ownership.
 
-For a known child, inspect `subagent({ action: "status", id: "..." })`. A live child receives focused guidance with `action: "steer"`; a completed/paused child may be continued with `action: "resume", id, message`. Resume authoritatively checks eligibility and preserves the stored agent, model and tools. If unavailable, say why and start a new same-role context with a sufficient brief; do not imply its history was restored.
+`isolation: "worktree"` starts from committed HEAD; it cannot see staged/uncommitted changes and has no baseRef parameter. Never use it to review an uncommitted diff. Check `worktreeIsolation` is enabled in both effective global/project settings BEFORE requesting isolation: the engine can silently drop the option when disabled. A creation failure is a blocker, not permission to run unisolated.
 
-Inside a workflow, use `await runs.run(newKey, { resume: priorRunId, task: "focused follow-up" })` without `agent` or `model`. Each distinct follow-up needs a new stable key. Retain the latest returned `runId` for later continuations. `children.list` is a workflow-only roster, not an exhaustive list of direct children. To change a route, launch the new candidate rather than trying to change it through resume.
+The engine preserves changed work as a local `pi-agent-*` branch, then removes the temporary worktree. Consume the returned branch/handoff, not a stale directory path. The parent owns integration and affected acceptance. Bash is not confined to the copy by an OS sandbox.
 
-Steer a workflow child through `await runs.steer(key, message)` using its stable key, not a raw run ID. Delivery receipts do not prove model compliance. Observe every stored run promise with await, Promise.race or Promise.all before workflow completion.
+## Continuity
 
-## Async results and failures
+Direct runs notify completion and return an agent ID. Inspect once when needed with `subagent({ op: "result", agent_id })`; use `input: "{\"verbose\":true}"` for the conversation. A live direct agent receives `op: "steer", agent_id, message`. A finished eligible agent resumes via `op: "run", prompt, description, subagent_type` plus `input: "{\"resume\":\"<id>\"}"`. Check the result schema via help when needed.
 
-While an async child writes, the parent may inspect unaffected material or prepare validation, but must not edit the same active checkout. Answer blocking child requests through `subagent_supervisor` using the exact `replyTo`; children use `contact_supervisor` when available.
+A live record retains its session/model/tools on resume. Disk-reopened mentions re-resolve the current agent definition; do not assume a historical tool contract after reload, edits or record eviction. If the owner cannot resume safely, report why and start a fresh same-role child with a sufficient brief. Never imply restored history when none exists. A route change needs a new named launch.
 
-Ordinary async runs notify the parent natively. When only pending children remain, yield and let Pi wake the session; do not sleep, poll or call `bg_wait` merely to wait. Use `bg_wait` only for provider/detached work without native completion delivery when the result is required at that barrier. Keep final verification async too; foreground mode is not a workaround for a last gate.
+Inside a workflow, label the original child and continue it with `await agent("focused follow-up", { resume: "original-label" })`. Do NOT combine resume with agentType/model/effort/isolation/gate/schema. Resume-by-label and journal replay are different:
 
-Execution success, validation evidence and the Router verifier's verdict are distinct. Generated roles do not request Pi's automatic builtin-reviewer inference; the parent still arranges independent `tr_verify` acceptance under [the coding contract](coding-quality.md). Preserve host-configured evidence gates instead of disabling them to obtain a pass.
+- `resume` continues a child's conversation;
+- `resumeFromRunId` replays an unchanged leading prefix of prior workflow calls, only within the same session, after that workflow has finished/stopped. Failed/changed calls break the prefix. A workflow containing child resume cannot be journal-replayed.
 
-On workflow/child/provider/extension/tool setup failure, stop the affected lane and record the exact failure, run/status and repo/cwd/worktree/branch/ref. Verify a clean worktree or capture the partial diff before a same-protocol retry. Do not silently replace the model, use Pi builtin roles, switch to a different workflow engine, run `pi -ne`, or fall back to Codex/Claude/Cursor CLI.
+Workflow children are owned by their workflow and invisible to direct result/steer tools. Use the native inspector to stop/pause/retry a live workflow; do not invent workflow_control or runs.steer endpoints for this runtime.
+
+## Evidence and failures
+
+While a child writes, the parent may inspect unaffected material, but must not edit that checkout. Background runs deliver native notifications. When only pending children remain, yield: never sleep, poll or use another engine merely to wait.
+
+There is no supervisor RPC or contact_supervisor tool. A child reports blockers/questions and stops; the parent resolves and resumes when eligible. A steering delivery is not proof of compliance.
+
+Use `gate` for an actual shell validation when appropriate; on Windows it runs through cmd, not bash. With a worktree it runs before cleanup, in the child's tree. A gate supplements, never replaces, independent `tr_verify` acceptance. Read-only children return reports as text; the engine writes their transcripts/journal, so do not add write permission for artifacts. Preserve desired reports outside temporary storage before reboot.
+
+Check actual resolved model/thinking in child session/invocation metadata or the workflow inspector (including "asked" versus effective levels), not merely requested options or child prose. Null outputs, incomplete/steered runs, route mismatch, clamping, missing web_access, leaked tools and setup failures are not acceptance passes.
+
+On failure record exact route/error/run, cwd/worktree/branch/ref and any partial diff; retry only the affected lane after checking baseline. Never silently replace a model, builtin role, workflow engine, permissions or execution mode.
