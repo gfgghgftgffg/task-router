@@ -173,7 +173,7 @@ export function render(c, options = {}) {
     files.set(`skills/task-routing/references/roles/${role}.md`, contract);
   }
   files.set(`${c.profile}.config.toml`, '# Generated from routing.toml. Rebuild to change models or efforts.\n' + stringify(profile));
-  for (const relative of ['SKILL.md', 'references/coding-quality.md', 'references/parallel-work.md', 'references/research-evidence.md', 'agents/openai.yaml']) {
+  for (const relative of ['SKILL.md', 'references/coding-quality.md', 'references/parallel-work.md', 'references/orchestration.md', 'references/research-evidence.md', 'agents/openai.yaml']) {
     files.set(`skills/task-routing/${relative}`, read(path.join(ROOT, 'skill', relative)));
   }
   files.set('skills/task-routing/references/role-map.md', [
@@ -187,6 +187,7 @@ export function render(c, options = {}) {
     'Named roles carry their provider, sandbox, and instructions. A model-only spawn is not equivalent when it cannot preserve these settings.',
     'Use supported per-spawn model/effort overrides for explicit user choices. If named roles are unavailable, read the selected contract and explicitly select the effective model and effort only when the host can enforce the required provider and permissions.',
     'Continue related work with a suitable owner through its known ID using send_input. Independent new tasks start fresh; fork only when most parent history is relevant and the host preserves the selected role, model/effort, provider, and permissions. Follow [the context, isolation, and lifecycle rules](parallel-work.md) for dispatch checks, resume limits, and sharing.',
+    'Choose the current phase\'s execution shape separately from model tier under [phase-level orchestration](orchestration.md). Check actual delegation capabilities, not host/plugin names: with both direct subagents and workflows choose by decision structure; with one use it for bounded phases; with neither report required delegation as unavailable. Preserve routes, acceptance, aggregate concurrency and repair limits.',
     'If the effective model, effort, or role is rejected, report the exact route and failure. Do not silently fall back to the default, fabricate success, use an unnamed inherited-model fork, or weaken permissions.', '',
   ].join('\n'));
   files.set('AGENTS.md', [START,
@@ -194,6 +195,7 @@ export function render(c, options = {}) {
     'Its role map defines defaults. Explicit user model/effort instructions take precedence for their stated task or role scope without changing persistent settings. Preserve host permissions and project constraints; report unsupported choices instead of silently substituting models.',
     'Choose among the role map candidates by task complexity, risk, context volume, and economy; do not use the strongest candidate for every task by default.',
     'The parent owns direction and decisions; assigned children follow their role without recursively orchestrating. Load only the role and workflow guidance needed for this task.',
+    'Choose among available direct-subagent and workflow operations by decision structure and useful batching, not agent count or number of steps. If only one is available, use it for bounded phases; do not invent the other. Reassess at safe phase boundaries; independent coding acceptance remains required.',
     'Research summaries are navigation aids. Before important evidence-based decisions, the main agent reads the relevant originals and checks coverage; another child does not replace this judgment.',
     'Within the authorized task, continue through the requested deliverable and relevant acceptance checks, fixing failures caused by the change. Do not stop at a first draft or add routine approval checkpoints. Report concrete blockers and unverified requirements.',
     'Match reading and verification to the task. Do not force every role, a full-repository survey, repeated successful checks, or unrelated improvements. Completion does not expand scope or external-action permissions.',

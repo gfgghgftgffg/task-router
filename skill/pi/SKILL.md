@@ -28,9 +28,17 @@ Exact file/symbol locating stays light; bounded call-chain tracing needs more ju
 - `tr_general` candidates deliver non-coding summaries, prose, structured information or analysis. New application/rendering code goes through coding.
 - Tiny non-coding answers and known short reads can stay in the parent. Do not manufacture searches, stages or full-repository audits.
 
+## Choose the current phase's shape
+
+Before coordinating several children or a workflow phase, read [phase-level orchestration](references/orchestration.md) once. Choose execution shape separately from model tier. Check the actual available delegation operations before dispatch, not the host/plugin name. More than one agent, parallel work, multiple steps, and independent verification do not require a workflow.
+
+If direct subagents and workflows are both available, prefer direct coordination for changing scope or short named assignments, and workflows for bounded stable phases with useful batching, pipeline overlap, reuse or aggregation. With direct subagents only, the parent coordinates all phases and dependencies through them. With workflows only, use short bounded phases and return evidence to the parent before deciding successors. With neither, keep eligible parent work here and report unavailable required delegation or acceptance.
+
+Reassess at safe phase boundaries; do not lock the entire task into one shape. Preserve ownership, aggregate concurrency, exact routes, independent acceptance and the same work unit's repair limit. Honor supported user execution choices, report explicitly required unavailable modes, and follow the actual executor's schema. Do not transplant another plugin's API or change mode to bypass an infrastructure/permission failure.
+
 ## Preflight
 
-Before first use, inspect `subagent({ op: "help", input: "run" })` for enabled types and the installed schema. `/agents` is the operator UI. There is no `action: list/models/doctor/guide` API. Check the selected flat `agents/tr_*.md` and any same-name definitions in the project's `.agents/agents/` and `.pi/agents/` (the latter wins). Refuse unexpected pins, tools, nested delegation or permissions. Reload after installation so the facade's startup type list is current.
+Before first use, inspect the available operations and selected operation's installed schema. For lean, use `subagent({ op: "help", input: "run" })` when direct runs are available, or `input: "workflow"` for a workflow-only surface. `/agents` is the operator UI. There is no `action: list/models/doctor/guide` API. Check the selected flat `agents/tr_*.md` and any same-name definitions in the project's `.agents/agents/` and `.pi/agents/` (the latter wins). Refuse unexpected pins, tools, nested delegation or permissions. Reload after installation so the facade's startup type list is current.
 
 Resolve an omitted provider from the ACTIVE parent provider, never a sibling candidate or a recommended startup model. Confirm the EXACT available `provider/id` and supported thinking in live Pi metadata or a current credential-free registry snapshot checked by Router doctor. `pi --list-models` lists available models without a model prompt, but does not establish thinking support. A stale snapshot is not current evidence. If exact availability/support cannot be established, report that blocker before relying on the route.
 
@@ -40,7 +48,7 @@ Generated files deliberately omit model/thinking pins: direct calls cannot overr
 
 ## Dispatch through lean
 
-For one bounded child:
+When direct runs are available, for each fresh direct child:
 
 ```js
 subagent({
@@ -57,7 +65,9 @@ Use real registered models and configured thinking, not example placeholders. `i
 
 Briefs include objective, repo/cwd/branch/ref, edit ownership, applicable project/global instructions, confirmed sources/interfaces, acceptance criteria, validation, expected report and stop conditions. `prompt_mode: replace` does NOT inherit AGENTS.md/CLAUDE.md. The parent reads and supplies relevant constraints; do not claim automatic inheritance or widen tools to compensate. Generated contexts are fresh with skills and nested delegation disabled.
 
-For multi-step or parallel work, read [Pi execution](references/pi-execution.md). Use one native lean `op: "workflow"` with `agent()/parallel()/pipeline()`, explicitly selecting `tr_*`, exact models and efforts. Do not use the separate Dynamic Workflows tool, old `runs.*`, or Codex dispatch tools. Respect the Router and stricter host concurrency limits.
+Read [Pi execution](references/pi-execution.md) for either mode. In direct coordination, issue multiple `op: "run"` calls for independent work, use completion results to decide successors, and use supported steer/resume for focused follow-ups. This does not need an enclosing workflow.
+
+When a scripted phase is selected, use one native lean `op: "workflow"` with `agent()/parallel()/pipeline()`, explicitly selecting `tr_*`, exact models and efforts. Do not use the separate Dynamic Workflows tool, old `runs.*`, or Codex dispatch tools. Respect the aggregate Router and stricter host concurrency limits across both modes.
 
 Continue related work with its suitable known owner only after checking stored route, current definition, tools, cwd and baseline. Independent work and changed routes start fresh. Coder/verifier contexts are always independent.
 

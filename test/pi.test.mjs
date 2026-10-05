@@ -271,7 +271,8 @@ test('Pi doctor uses lean tuning and flags legacy nicobailon settings as ignored
   assert.equal(report.warnings.some(w => w.startsWith('Set fallbackSubagent') || w.startsWith('Set strictAgentFiles')), false);
   put(cwd, '.pi/subagents.json', '{"workflowsEnabled":false,"worktreeIsolation":false}');
   report = inspectPiCatalog(c, home, undefined, { cwd });
-  assert.match(report.errors.join('\n'), /workflowsEnabled is false/);
+  assert.deepEqual(report.errors, []);
+  assert.match(report.warnings.join('\n'), /workflowsEnabled is false.*direct coordination remains available/);
   assert.match(report.warnings.join('\n'), /silently drop requested isolation/);
 });
 

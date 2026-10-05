@@ -4,7 +4,7 @@
 
 Pi 后端保留五个职责契约、模型候选、`when` 选档提示和独立编码验收。执行依赖是 [@ssk_dev/pi-subagents-lean](https://github.com/kunkun9527/pi-subagents-lean)，其内部使用 [@tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents)。这不是 nicobailon 的 `pi-subagents`，不能混用两套参数或把它当作原插件的轻量开关。
 
-本版本以 Node 22.23.3 上的 Pi 1.0.2、lean 0.19.4 / tintinweb 0.19.0 验证。仓库 CLI 要求 Node 22+；Pi 1.0.2 自身要求 Node 22.19+。本项目不安装 provider，也不复用或覆盖内置角色。
+lean 后端曾以 Node 22.23.3 上的 Pi 1.0.2、lean 0.19.4 / tintinweb 0.19.0 做过真实执行验证。仓库 CLI 要求 Node 22+；Pi 1.0.2 自身要求 Node 22.19+。本项目不安装 provider，也不复用或覆盖内置角色。
 
 ## 安装
 
@@ -101,25 +101,48 @@ lean 使用 `op/prompt/subagent_type/run_in_background/input`，不是旧 `agent
 
 ## 并行、续聊与执行边界
 
-使用 lean 自己的 `op: "workflow"`，通过 input JSON 传 `script` / `scriptPath` / `args`，脚本为：
+### 按阶段选择
+
+编排先看实际可用能力，不根据 Pi 或插件名字推断模式。模型档位按复杂度、风险和上下文选；编排方式按当前阶段的输入输出、依赖、分支、停止条件和交互需求选。多 Agent、多步骤、并行或独立验收都不自动触发 workflow。
+
+- **两种能力都有**：开放排障、少量明确分工、需要根据发现调整方向时直接调度；决策结构明确，批处理、流水线、复用或汇总有实际收益时使用 workflow。可以直接探索 → 局部 workflow → 主线程处理异常。
+- **只有 subagents**：主线程协调并行、依赖、批次和跟进，不尝试调用 workflow。coder 实现 → 独立 verifier → 原 coder 修复也可直接调度。
+- **只有 workflow**：使用较短、有边界的阶段，探索结果先交回主线程判断，再定义下一阶段；不因为没有直接子任务接口就猜一条覆盖整个项目的固定流程。
+- **两者都没有**：主线程只处理允许自行完成的工作；需要委派或独立验收的部分报告能力缺失。
+
+下面的 lean API 说明描述当前安装后端，不是所有插件的通用字段。其他执行器必须按实际 schema 调用，并保留 Router 的角色、精确选档、权限和证据边界；不能只凭同名能力声称兼容。
+
+通信由主线程中转相关证据和原始来源，用 direct steer/resume 跟进；未向子 Agent 开放彼此发消息或自动同步上下文的工具。workflow 内的孩子仍归 workflow 所有，不能用 direct result/steer/resume 接管。
+
+改变模式要等阶段结束或确认停止，并核实剩余子任务、局部 diff 和基线；pause 不意味着在途 writer 已停止。所有模式共用 Router 的合计并发协调上限和原工作单元的修复计数，保持独立验收、所有权及精确选档。模型、权限或运行故障不授权静默切换模式。
+
+选择标准、反例及 Anthropic / OpenAI 官方依据见[阶段级编排](../skill/references/orchestration.md)，安装后为 `references/orchestration.md`。这是政策改进，不引入新框架、分类器或调度服务。
+
+### 原生 workflow API
+
+仅在选定脚本化阶段后使用 lean 自己的 `op: "workflow"`，通过 input JSON 传 `script` / `scriptPath` / `args`。例如一批目标按相同标准审查和复核；不是所有任务都要套用此模板：
 
 ```js
-export const meta = { name: "bounded_work", description: "Implement then independently verify" };
-const change = await agent("完整编码 brief", {
-  agentType: "tr_coding", model: "provider/exact-id", effort: "high", label: "implementation"
-});
-if (change === null) throw new Error("implementation failed");
-const verdict = await agent("原始验收条件和实际 diff 位置，不继承 coder 推理", {
-  agentType: "tr_verify", model: "provider/exact-id", effort: "medium", label: "acceptance"
-});
-if (verdict === null) throw new Error("verification failed");
-return { change, verdict };
+export const meta = { name: "bounded_audit", description: "Audit settled targets and independently check findings" };
+if (!Array.isArray(args.targets) || args.targets.length === 0) throw new Error("targets are required");
+const outcomes = [];
+// 顺序示例；并行批次还要按 Router/宿主上限约束，不能把并发额度当每种模式各一份。
+for (const target of args.targets) {
+  const finding = await agent(`按已确认的标准审查 ${target}，返回证据和未解决问题`, {
+    agentType: "tr_search", model: "provider/exact-id", effort: "high"
+  });
+  const verdict = finding === null ? null : await agent(`独立复核 ${target}；使用原始标准和实际来源，发现：${finding}`, {
+    agentType: "tr_verify", model: "provider/exact-id", effort: "medium"
+  });
+  outcomes.push({ target, finding, verdict });
+}
+return { outcomes, executionIncomplete: outcomes.some(item => item.finding === null || item.verdict === null) };
 ```
 
-使用注册模型/实际候选，示例不是可直接执行的配置。`agent()` 返回最终文本（schema 时为对象），失败/跳过返回 null；有文本也不自动等于验收 PASS。并行用 `parallel` 函数数组；跨阶段流水线用 `pipeline`。不是旧 `runs.run/runs.all`，也不是单独的 `pi-dynamic-workflows` 工具。本后端不适配后者。
+使用注册模型/实际候选，示例不是可直接执行的配置。`agent()` 返回最终文本（schema 时为对象），失败/跳过返回 null；有文本也不自动等于验收 PASS。示例的 `executionIncomplete` 只标记 null 执行缺口，不解析 verdict 或代表验收通过；主线程仍须检查每项实际证据、FAIL/INCOMPLETE 和适用标准。并行用 `parallel` 函数数组；跨阶段流水线用 `pipeline`。不是旧 `runs.run/runs.all`，也不是单独的 `pi-dynamic-workflows` 工具。本后端不适配后者。
 
 - 原生 workflow 总是后台；每个 run 并发上限为 `max(1, min(16, cpus - 2))`，没有可设置的 globalConcurrencyLimit。Router 的 max_concurrent 是额外协调上限；小于宿主上限时分批并 await，不能通过多个 workflow 绕过。
-- 直接后台 Agent 受 `subagents.json maxConcurrent` 限制（默认 10）。workflow 子 Agent 不占这个池，不能声称它们共享一个全会话硬上限。
+- 直接后台 Agent 受 `subagents.json maxConcurrent` 限制（默认 10）。workflow 子 Agent 不占这个池，不能声称它们共享一个全会话硬上限；主线程仍应合计约束两类活跃子 Agent 和流水线重叠阶段。
 - 共享目录只有一个 writer。并行写入需要独立 worktree 和明确所有权；读正在变化的内容必须等待 writer。
 - `isolation: "worktree"` 使用提交后的 HEAD，看不到未提交/暂存 diff；没有 baseRef。先检查全局/项目 worktreeIsolation 未禁用，否则引擎可能静默丢弃隔离请求。
 - 修改在完成时保存成 `pi-agent-*` 本地分支，临时 worktree 随后移除。父 Agent 用分支交接集成；不要使用已删除的路径。gate 在 worktree 清理前运行，Windows gate 使用 cmd。
@@ -175,13 +198,15 @@ node cli.mjs doctor --host pi --catalog pi-registry.json
 node cli.mjs install --host pi --catalog pi-registry.json --apply
 ```
 
-doctor 读取 `<pi-home>/subagents.json` 以及**命令当前目录**的 `.pi/subagents.json`，提示未知角色回退、off workflow 限制、禁用 worktree 和旧设置。检查别的工作项目时，从该项目调用仓库 CLI 的绝对路径。静态 CLI 不证明有效角色覆盖、扩展加载或凭据/服务可达。
+doctor 读取 `<pi-home>/subagents.json` 以及**命令当前目录**的 `.pi/subagents.json`，提示未知角色回退、off workflow 限制、禁用 worktree 和旧设置。`workflowsEnabled: false` 只警告脚本化阶段不可用，不阻止直接调度的安装；用户明确要求 workflow 时仍须报告不支持，不能伪装为等价执行。检查别的工作项目时，从该项目调用仓库 CLI 的绝对路径。静态 CLI 不证明有效角色覆盖、扩展加载或凭据/服务可达。
 
 Pi 中用 `/agents` 和 `subagent({ op: "help", input: "run" })` 检查加载及 schema；`pi --list-models` 列出可用模型但不证明 thinking 档位。此引擎没有旧 `/subagents-doctor`、`/subagents-models` 或 action 模型查询。实际模型和有效 thinking 应读子 session/invocation 或 workflow inspector，尤其注意 asked 与实际值不同的情况。
 
-本次验证包括 13 个真实候选的模型/档位/精确工具集合、fresh context、三个原测试不变的编码夹具与独立验收、按次模型覆盖、联网 fetch 官方文档，以及原生 parallel/pipeline/同子会话续聊。未进行模型质量 A/B；联网 fetch 不代表所有搜索服务账号都已验证。`npm test` 的回归只使用隔离本地夹具，不调用远端模型。
+此前后端迁移验证包括 13 个真实候选的模型/档位/精确工具集合、fresh context、三个原测试不变的编码夹具与独立验收、按次模型覆盖、联网 fetch 官方文档，以及原生 parallel/pipeline/同子会话续聊。未进行模型质量 A/B；联网 fetch 不代表所有搜索服务账号都已验证。`npm test` 的回归只使用隔离本地夹具，不调用远端模型。
 
 lean 的 token 宣传针对工具 schema/提示词贡献，使用字符估计且以空配置测量；它不代表本路由会话固定只用 275 tokens，也不是 provider 账单或子 Agent 执行成本的承诺。
+
+阶段级编排回归检查两宿主的政策产物、四种能力组合、批处理条件、阶段交接、验收/修复/并发边界和禁用 workflow 后的直接安装。它们是离线内容及安装检查，不代表模型必然遵守。另在 Pi 1.0.3 上用 `sub2api/gpt-6.1-sol / xhigh` 的 12 个 fresh 父上下文做决策检查，覆盖两种能力都有、只有 subagents、只有 workflow、两者都没有，以及用户明确选型、故障和独立验收要求，12/12 符合预期。能力组合由测试 brief 声明，执行工具禁用，没有实际启动子 Agent/workflow；这不等于端到端执行、任意插件 API 兼容或普遍可靠性保证。
 
 ## 托管文件与更新
 

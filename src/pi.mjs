@@ -98,7 +98,7 @@ export function renderPi(c) {
   }
   files.set('skills/task-routing/SKILL.md', read(path.join(ROOT, 'skill', 'pi', 'SKILL.md')));
   files.set('skills/task-routing/references/pi-execution.md', read(path.join(ROOT, 'skill', 'pi', 'execution.md')));
-  for (const filename of ['coding-quality.md', 'research-evidence.md']) {
+  for (const filename of ['coding-quality.md', 'research-evidence.md', 'orchestration.md']) {
     files.set(`skills/task-routing/references/${filename}`, read(path.join(ROOT, 'skill', 'references', filename)));
   }
   files.set('skills/task-routing/references/role-map.md', [
@@ -113,6 +113,7 @@ export function renderPi(c) {
     'Model/thinking are intentionally NOT pinned in agent frontmatter. Always supply both from this table (or the explicit user override); a bare named launch would inherit the parent model and is NOT Router routing.',
     'An omitted provider inherits the active parent provider, not the provider on another candidate or the recommended orchestrator. Check the exact available registry entry and supported thinking before launching. Never rely on fuzzy/provider fallback or clamping.',
     'Direct lean dispatch uses op: run, subagent_type and prompt, with model: provider/id and thinking as separate fields in input JSON. Native workflow agent() uses agentType, model and effort. Never append :thinking to the model.',
+    'Choose the current phase\'s execution shape separately from model tier under [phase-level orchestration](orchestration.md). Check actual delegation capabilities, not host/plugin names: with both direct subagents and workflows choose by decision structure; with one use it for bounded phases; with neither report required delegation as unavailable. Preserve routes, acceptance, aggregate concurrency and repair limits.',
     'Explicit user model/effort choices override only their stated task or role scope without rewriting configuration. Prefer a matching candidate; an ad-hoc override retains the original tools and contract. Refuse unsupported choices.',
     'Continue related work only after checking its stored route, current definition, cwd and baseline. A changed route needs a new fresh child. Coder/verifier contexts are independent.',
     'Search exposes the lean web_access facade (search/check/fetch/get), not four raw web tools. Search/reasoning have no bash/edit/write. Verify has bash but no edit/write; no-source-edit is policy, not an OS sandbox.',
@@ -123,6 +124,7 @@ export function renderPi(c) {
     'Task Router for Pi is opt-in. When the user invokes /skill:task-routing or applicable instructions explicitly enable it, the coordinating parent follows that skill and its generated tr_* role map. Otherwise keep the existing workflow.',
     'Installation alone does not authorize delegation. An assigned child follows its role contract and does not activate parent routing or launch further agents.',
     'Use @ssk_dev/pi-subagents-lean for execution, not builtin role substitutions or a separate runner. Supply exact model and thinking from the role map on every fresh launch; explicit task-scoped choices take precedence. Preserve host permissions and report unsupported routes.',
+    'Choose among available direct-subagent and workflow operations by decision structure and useful batching, not agent count or number of steps. If only one is available, use it for bounded phases; do not invent the other. Reassess at safe phase boundaries; independent coding acceptance remains required.',
     PI_MARKERS.end, '',
   ].join('\n'));
   return files;
@@ -184,7 +186,7 @@ export function inspectPiCatalog(c, home, catalogOverride, options = {}) {
     if (choice.role !== 'orchestrator' && choice.effort === 'off') warnings.push(`${label}: thinking off is supported by direct lean runs, but native workflow agent() effort rejects off; do not silently inherit another level.`);
     rows.push({ role: label, agent: choice.nativeRole, model: choice.model, thinking: choice.effort, provider: model?.provider ?? provider ?? 'active parent provider' });
   }
-  if (runtime.workflowsEnabled === false) errors.push('Pi subagents.json workflowsEnabled is false; native lean workflow routing is unavailable');
+  if (runtime.workflowsEnabled === false) warnings.push('Pi subagents.json workflowsEnabled is false; native lean workflow routing is unavailable, but direct coordination remains available. Report unsupported explicit workflow requests.');
   if (runtime.fallbackSubagent !== 'none' && runtime.fallbackSubagent !== false) warnings.push('Set fallbackSubagent: "none" in subagents.json to reject unknown/disabled agents instead of substituting a builtin role.');
   if (runtime.strictAgentFiles !== true) warnings.push('Set strictAgentFiles: true in subagents.json to refuse malformed agent files at startup; still inspect mid-session changes.');
   if (runtime.worktreeIsolation === false) warnings.push('Pi subagents.json worktreeIsolation is false: the engine can silently drop requested isolation. Do not launch concurrent writers or claim a worktree.');

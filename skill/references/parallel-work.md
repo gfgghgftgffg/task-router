@@ -2,6 +2,8 @@
 
 Actively run independent work at the same time through the host's native spawn capability: separate searches for separate questions, separate non-code deliverables, and separate development units. Several children of the same role are fine. Reuse the owner for near-term continued work on the same module; do not serialize unrelated modules just to reuse an agent.
 
+The parent mediates evidence and follow-up instructions between children through supported native tools. Do not claim peer-to-peer messaging or synchronized sibling context. Choose the current phase's shape under [phase-level orchestration](orchestration.md); several children or independent verification do not require a separate workflow executor. Reassess after discoveries rather than fixing an entire project plan up front.
+
 ## Continuity and context
 
 Apply the Skill's dispatch and context freshness checks before reusing an owner. For related implementation, repairs, or focused research follow-ups, use `send_input` with the known ID and send only new requirements, changed facts or baseline, and necessary sources. Do not replay the full history.

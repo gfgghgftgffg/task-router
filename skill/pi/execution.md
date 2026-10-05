@@ -2,7 +2,19 @@
 
 Task Router executes through `@ssk_dev/pi-subagents-lean` over tintinweb's engine. This reference describes its native API, not a new scheduler. Inspect `subagent({ op: "help", input: "workflow" })` when the installed schema is unclear.
 
+## Direct coordination
+
+Choose the phase's shape under [phase-level orchestration](orchestration.md), based on available operations rather than host/plugin names. Multi-agent or multi-step work does not require a workflow. When direct subagents are available, the parent can coordinate them through lean's run/result/steer and eligible resume; with both modes available, prefer this for open-ended investigation, short named assignments or frequent direction changes.
+
+Launch independent assignments with multiple `op: "run"` tool calls in the same turn, each selecting its own named candidate and explicit model/thinking under the Skill's cold-start brief and preflight rules. Both run in the background; neither needs an enclosing script. Read results when completion notifications arrive, then decide and launch only the dependent follow-ups needed. Do not poll or assume a pending result.
+
+For a bounded fix, launch the coder directly, then a separate verifier after target writes stop. Send actionable FAIL/INCOMPLETE findings to the parent; resume the eligible coder with a focused repair brief and recheck independently under the original criteria and configured repair limit. Neither two roles nor a repair loop requires a workflow.
+
+Pass relevant evidence and original source references between children through the parent. Steer a running direct owner or resume an eligible finished one; do not claim peer-to-peer messaging, shared sibling context or a blocking supervisor channel. See Continuity below for the actual fields and limits.
+
 ## Native workflow
+
+Use this only for a selected scripted phase, not as the default wrapper for every multi-step task. With workflows only, use the available workflow for the next bounded phase, including investigation or a single child, and return evidence before defining successors; do not require missing direct operations. The script may discover its item list, loop and branch; what must be settled is the current phase's decision structure and handoff boundary. If workflows are disabled/unavailable, available direct work remains possible, but report an explicitly requested unsupported workflow rather than inventing an API.
 
 Use one enclosing call:
 
@@ -26,11 +38,17 @@ Always select the named candidate and both route fields from [the role map](role
 
 Workflows are always background. Do not add `run_in_background` to a workflow or `async` to its children. Keep all agent promises observed and awaited; the runtime rejects un-awaited children. Inspect native runs in `/agents → Workflows`; the facade's result/steer operations address direct agents, not workflow IDs.
 
+## Phase handoff
+
+A hybrid task can settle scope through direct children, run one stable batch as a native workflow, and return to direct coordination for exceptional findings. Return per-item outcomes, evidence references, failures and unresolved decisions; stop dependent stages on unexpected requirements instead of guessing new scope. Preserve null/incomplete outcomes in the aggregate.
+
+Change shape only after completion or a supported stop is confirmed and outstanding children/partial writes are accounted for. Pausing does not stop in-flight writers. Workflow children cannot be adopted by direct result/steer/resume: launch a fresh, sufficiently briefed direct child when needed. Do not claim journal replay transfers a child conversation. A planned phase change is not a fallback for infrastructure, permissions or an unsupported route.
+
 ## Concurrency and ownership
 
 The engine caps each native workflow at `max(1, min(16, cpus - 2))`, independently of the session's `subagents.json maxConcurrent` pool. Router cannot set that cap through a tool argument. To enforce a smaller Router maximum, process bounded chunks and await each batch before launching the next. Bound pipeline item batches too: overlapping stages still count as live children. Never create multiple competing enclosing workflows or use nested delegation to bypass a cap.
 
-Direct background agents also obey the engine's session maxConcurrent (default 10). Keep aggregate Router work under its own configured maximum and any stricter host limit. These pools are not Codex's session-wide thread limit.
+Direct background agents also obey the engine's session maxConcurrent (default 10). Keep aggregate Router work under its own configured maximum and any stricter host limit. Count live direct and workflow children together, including overlapping pipeline stages; do not give each mode a separate Router allowance. These pools are not Codex's session-wide thread limit.
 
 Keep one writer per shared cwd/worktree. Readers of changing content depend on the writer. Independent concurrent writers need managed worktrees with distinct ownership.
 
