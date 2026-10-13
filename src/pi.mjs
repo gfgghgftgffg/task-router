@@ -6,7 +6,12 @@ import { ROOT, ROLE_META, getRoleChoices, mergeAgents, planInstall, safeTarget }
 export const PI_THINKING = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 export const PI_MARKERS = { start: '<!-- pi-task-router:start -->', end: '<!-- pi-task-router:end -->' };
 export const PI_MANIFEST = '.task-router/pi/manifest.json';
-export const PI_RUNTIME = '@ssk_dev/pi-subagents-lean';
+export const PI_RUNTIME = '@gfgghgftgffg/pi-subagents-lean';
+export const PI_WEB_RUNTIME = '@gfgghgftgffg/pi-web-access-lean';
+export const PI_RUNTIME_REPOSITORY = 'https://github.com/gfgghgftgffg/amox_pi_extensions_lean';
+// Reviewed integration baseline, not an npm dependency or a claim about the
+// installed runtime. Future releases still need schema/scope review and reload.
+export const PI_RUNTIME_BASELINE = Object.freeze({ tag: 'v0.1.2', engine: '0.22.0', minimumPi: '1.1.0' });
 const roles = Object.keys(ROLE_META).join('|');
 // The flat namespace is required by tintinweb's non-recursive discovery. Old
 // nicobailon base/candidate paths are removable only with an unchanged manifest hash.
@@ -19,6 +24,9 @@ const tableText = value => String(value).replace(/\|/g, '\\|');
 // Any ext: selector closes extension-tool exposure to an explicit allowlist.
 // Select the mandatory executor's facade and deny it: other extension hooks
 // (including permission hooks) still load, but no unlisted extension tool leaks.
+// Names in ext: selectors are unscoped short names, even for @gfgghgftgffg
+// packages. The upstream parser splits at the first '/', so scoped names here
+// would break narrowing. Verify actual package ownership at runtime.
 const executorSelector = 'ext:pi-subagents-lean/subagent';
 export const PI_DENIED_TOOLS = ['subagent', 'Agent', 'SubagentWorkflow', 'workflow', 'workflow_control', 'get_subagent_result', 'steer_subagent'];
 export const PI_ROLE_TOOLS = {
@@ -103,7 +111,7 @@ export function renderPi(c) {
   }
   files.set('skills/task-routing/references/role-map.md', [
     '# Configured Pi routes', '',
-    `Generated from routing.toml; source profile label: ${c.profile}. Runtime: ${PI_RUNTIME} over @tintinweb/pi-subagents. These are Router agents, not builtin personas.`, '',
+    `Generated from routing.toml; source profile label: ${c.profile}. Runtime: ${PI_RUNTIME} from [amox_pi_extensions_lean](${PI_RUNTIME_REPOSITORY}), over @tintinweb/pi-subagents. Reviewed baseline: ${PI_RUNTIME_BASELINE.tag} / engine ${PI_RUNTIME_BASELINE.engine}; Pi >=${PI_RUNTIME_BASELINE.minimumPi}. These are Router agents, not builtin personas.`, '',
     `Parent startup choice: model ${piModel(c.orchestrator)}; thinking ${c.orchestrator.effort}. Loading this skill does not switch the parent model.`,
     `Maximum concurrent children requested by Router: ${c.max_concurrent}. Maximum coding repair follow-ups per work unit: ${c.max_coding_repairs}.`,
     'Respect stricter host limits. The native workflow cap is max(1, min(16, cpus - 2)), not a configurable globalConcurrencyLimit. Bound each parallel batch to the Router maximum; direct background runs also obey subagents.json maxConcurrent.', '',
@@ -117,13 +125,16 @@ export function renderPi(c) {
     'Explicit user model/effort choices override only their stated task or role scope without rewriting configuration. Prefer a matching candidate; an ad-hoc override retains the original tools and contract. Refuse unsupported choices.',
     'Continue related work only after checking its stored route, current definition, cwd and baseline. A changed route needs a new fresh child. Coder/verifier contexts are independent.',
     'Search exposes the lean web_access facade (search/check/fetch/get), not four raw web tools. Search/reasoning have no bash/edit/write. Verify has bash but no edit/write; no-source-edit is policy, not an OS sandbox.',
+    'Check the effective definition and origin in /agents: installed package agents rank below global/workspace/project files, but above builtins. Inspect packageAgents/packageWorkflows and project trust; reload after discovery changes. Refuse unexpected model/thinking, isolated/isolation, exclude_extensions, delegation or tool overrides.',
+    'With extensions: true the engine also loads builtin codemode/tool_search/MCP. The closed ext: scope must exclude their unlisted tools, including deferred and nested ctx.executeTool calls; keep provider/permission hooks and do not assume MCP processes are disabled.',
+    'Background completions may cover only part of a batch under smart/async join. Track outstanding children and writers before dependent stages or handoff; do not poll or interpret a notification as all siblings finishing.',
     'Check global and project .pi/agents / .agents/agents definitions before dispatch: frontmatter pins can outrank a direct-call override. Replaced prompts do not inherit AGENTS.md; include applicable constraints in each cold-start brief.', '',
   ].join('\n'));
   files.set('AGENTS.md', [
     PI_MARKERS.start,
     'Task Router for Pi is opt-in. When the user invokes /skill:task-routing or applicable instructions explicitly enable it, the coordinating parent follows that skill and its generated tr_* role map. Otherwise keep the existing workflow.',
     'Installation alone does not authorize delegation. An assigned child follows its role contract and does not activate parent routing or launch further agents.',
-    'Use @ssk_dev/pi-subagents-lean for execution, not builtin role substitutions or a separate runner. Supply exact model and thinking from the role map on every fresh launch; explicit task-scoped choices take precedence. Preserve host permissions and report unsupported routes.',
+    `Use ${PI_RUNTIME} from amox_pi_extensions_lean for execution, not builtin role substitutions or a separate runner. Supply exact model and thinking from the role map on every fresh launch; explicit task-scoped choices take precedence. Preserve host permissions and report unsupported routes.`,
     'Choose among available direct-subagent and workflow operations by decision structure and useful batching, not agent count or number of steps. If only one is available, use it for bounded phases; do not invent the other. Reassess at safe phase boundaries; independent coding acceptance remains required.',
     PI_MARKERS.end, '',
   ].join('\n'));
@@ -188,9 +199,13 @@ export function inspectPiCatalog(c, home, catalogOverride, options = {}) {
   }
   if (runtime.workflowsEnabled === false) warnings.push('Pi subagents.json workflowsEnabled is false; native lean workflow routing is unavailable, but direct coordination remains available. Report unsupported explicit workflow requests.');
   if (runtime.fallbackSubagent !== 'none' && runtime.fallbackSubagent !== false) warnings.push('Set fallbackSubagent: "none" in subagents.json to reject unknown/disabled agents instead of substituting a builtin role.');
-  if (runtime.strictAgentFiles !== true) warnings.push('Set strictAgentFiles: true in subagents.json to refuse malformed agent files at startup; still inspect mid-session changes.');
+  if (runtime.strictAgentFiles !== true) warnings.push('Set strictAgentFiles: true in subagents.json to refuse malformed local agent files at startup; malformed package definitions may still be skipped, and mid-session changes need inspection.');
   if (runtime.worktreeIsolation === false) warnings.push('Pi subagents.json worktreeIsolation is false: the engine can silently drop requested isolation. Do not launch concurrent writers or claim a worktree.');
   if (settings.subagents) warnings.push('Legacy settings.json subagents options belong to nicobailon; lean uses subagents.json instead. Legacy maxThinking/agentOverrides do not enforce routes.');
+  const sources = Array.isArray(settings.packages) ? settings.packages.map(entry => typeof entry === 'string' ? entry : entry?.source).filter(source => typeof source === 'string') : [];
+  if (sources.some(source => /^npm:@ssk_dev\/pi-(?:subagents|web-access)-lean(?:@|$)/.test(source))) warnings.push(`Legacy @ssk_dev lean packages are configured. Migrate execution/search to ${PI_RUNTIME} and ${PI_WEB_RUNTIME} via the amox_pi_extensions_lean repository installer; inspect pi list and remove only the replaced sources. Do not load duplicate facades.`);
+  warnings.push(`Installed runtime identity/version is unverified. Reviewed baseline: amox_pi_extensions_lean ${PI_RUNTIME_BASELINE.tag}, @tintinweb/pi-subagents ${PI_RUNTIME_BASELINE.engine}, Pi >=${PI_RUNTIME_BASELINE.minimumPi}; inspect actual loaded packages and operation schemas before dispatch.`);
+  warnings.push('Package agent/workflow discovery and project trust are unverified. packageAgents/packageWorkflows default on; inspect the effective role origin and overrides, then reload after discovery/trust changes.');
   warnings.push('Static checks do not prove lean loading, credentials, project agent overrides, extension tool scope or dispatch success. Inspect /agents and subagent help, then verify the actual child model/thinking and tools.');
   warnings.push('Pi tool allowlists do not reproduce Codex OS sandboxes. Verification bash can write files; no-source-edit is a role contract.');
   return { errors, warnings, rows, catalogPath };

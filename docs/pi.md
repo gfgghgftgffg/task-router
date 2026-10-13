@@ -1,27 +1,38 @@
-# Pi / pi-subagents-lean 适配
+# Pi / amox-pi-extensions-lean 适配
 
 [返回 README](../README.md)
 
-Pi 后端保留五个职责契约、模型候选、`when` 选档提示和独立编码验收。执行依赖是 [@ssk_dev/pi-subagents-lean](https://github.com/kunkun9527/pi-subagents-lean)，其内部使用 [@tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents)。这不是 nicobailon 的 `pi-subagents`，不能混用两套参数或把它当作原插件的轻量开关。
+Pi 后端保留五个职责契约、模型候选、`when` 选档提示和独立编码验收。执行和搜索依赖来自 [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean)：`@gfgghgftgffg/pi-subagents-lean` 内部使用 [@tintinweb/pi-subagents](https://github.com/tintinweb/pi-subagents)，`@gfgghgftgffg/pi-web-access-lean` 提供搜索门面。不是旧 `@ssk_dev` 安装来源，也不是 nicobailon 的 `pi-subagents`；不能混用两套参数。
 
-lean 后端曾以 Node 22.23.3 上的 Pi 1.0.2、lean 0.19.4 / tintinweb 0.19.0 做过真实执行验证。仓库 CLI 要求 Node 22+；Pi 1.0.2 自身要求 Node 22.19+。本项目不安装 provider，也不复用或覆盖内置角色。
+本次审查基线为扩展仓库 `v0.1.2`（commit `64f2618`），subagents 引擎 0.22.0、web-access 引擎 0.40.0；需要 Pi >=1.1.0、Node >=22.19.0、npm 和 Git。Router CLI 仍要求 Node 22+，不安装 provider、不复用或覆盖内置角色。实际安装版本可能不同，须核对包元数据和工具 schema；审查基线不是自动钉住用户运行时。
+
+旧 lean 0.19.4 / tintinweb 0.19.0 曾在 Pi 1.0.2、Node 22.23.3 上做过真实执行验证。这是历史证据，不能替代新依赖的运行验证。
 
 ## 安装
 
-先替换执行插件，再安装 Router 角色。如果装过旧版：
+先用 `pi list` 核对安装来源，再移除被替换的旧门面；只运行与你的列表对应的命令。例如旧 npm 来源：
 
 ```sh
-pi remove npm:pi-subagents
+pi remove npm:@ssk_dev/pi-subagents-lean@0.19.4
+pi remove npm:@ssk_dev/pi-web-access-lean
+# 更早的 nicobailon 用户对应移除 npm:pi-subagents；未装过就跳过。
 ```
 
-安装执行和联网检索依赖：
+保留 provider、权限插件和其他扩展。不要同时加载多个 subagents/web-access 门面，也不要把新包的上游依赖另行启用为扩展。新项目不发布 npm 包；包名用于运行时身份识别，不是当前可用的 npm 安装命令。
+
+以下命令在**扩展仓库**执行，按包独立安装：
 
 ```sh
-pi install npm:@ssk_dev/pi-subagents-lean@0.19.4
-pi install npm:@ssk_dev/pi-web-access-lean
+git clone https://github.com/gfgghgftgffg/amox_pi_extensions_lean.git
+cd amox_pi_extensions_lean
+# 可选：git checkout v0.1.2，固定本次审查基线。
+node scripts/install-extension.mjs pi-subagents-lean
+node scripts/install-extension.mjs pi-web-access-lean
 ```
 
-不要同时加载多个 subagents 或 web-access 门面，也不要把 lean 的上游依赖另行启用为扩展。替换插件后 `/reload` 或重启 Pi，确认只有一个 `subagent` 工具。旧会话可能仍持有旧接口；插件安装成功不等于旧运行时已刷新。
+已有副本不用重复 clone；在扩展仓库安全更新（main 可用 `git pull --ff-only`，固定 tag 则选择目标版本），再运行相应安装脚本。无需在扩展仓库根目录 `npm ci`；安装器为每个包创建独立 production prefix，默认位于 `~/.pi/lean-packages/<扩展名>/`，再向 Pi 注册本地包路径。不能用 `pi install git:github.com/gfgghgftgffg/amox_pi_extensions_lean` 把整个 workspace 根目录当作独立扩展。Router 不要求安装 `rpiv-todo-lean`。
+
+替换后 `/reload` 或重启 Pi，用 `pi list` 和 `/agents` 核对来源及角色，确认只有一个 `subagent` 和一个 `web_access` 门面。旧会话可能仍持有旧接口；安装成功不等于运行时已刷新。随后回到 **Task Router 仓库**安装角色。
 
 建议把以下设置合并进 `~/.pi/agent/subagents.json`，保留已有字段：
 
@@ -33,9 +44,11 @@ pi install npm:@ssk_dev/pi-web-access-lean
 }
 ```
 
-`fallbackSubagent` 禁止未知/禁用角色被替换成 general-purpose；`strictAgentFiles` 在启动时拒绝损坏角色；`workflowsEnabled` 显式启用本引擎的原生 workflow。项目 `.pi/subagents.json` 会覆盖全局同名项。旧 nicobailon 的 `settings.json subagents.*`（含 maxThinking、agentOverrides）不适用于这个引擎。安装器不会代改上述配置。
+`fallbackSubagent` 禁止未知/禁用角色被替换成 general-purpose；`strictAgentFiles` 在启动时拒绝损坏的本地角色，不保证损坏包内角色也触发失败；`workflowsEnabled` 显式启用本引擎的原生 workflow。项目 `.pi/subagents.json` 会覆盖全局同名项。旧 nicobailon 的 `settings.json subagents.*`（含 maxThinking、agentOverrides）不适用于这个引擎。安装器不会代改上述配置。
 
-`tr_search` 使用 lean 的 `web_access`，支持 search/check/fetch/get 四种操作，不要求暴露四个原始工具。扩展选择器按包的短名匹配；本后端的搜索工具配置针对 `@ssk_dev/pi-web-access-lean`，不是直接启用 `pi-web-access`。不要仅因父会话能联网就假定子会话也能。
+引擎 0.22.0 默认从已安装 Pi 包的 `pi.subagents` / `pi-subagents` 声明发现 Agent/workflow。`packageAgents` 和 `packageWorkflows` 可分别设为 true、false 或包白名单；后者只控制包内 workflow 发现，不等于 `workflowsEnabled`。包定义高于 builtin，低于 global → workspace `.agents/agents` → project `.pi/agents`；`/agents` 显示包来源且包角色只读。仅由不受信任项目配置的包不可见。不要仅凭同名角色或 strictAgentFiles 判断契约正确，须检查实际定义和来源。发现设置、trust 或角色变化后 reload；Router 不自动关掉包发现或扩大信任。
+
+`tr_search` 使用 lean 的 `web_access`，支持 search/check/fetch/get 四种操作，不要求暴露四个原始工具。扩展选择器仍按包的**无 scope 短名**匹配，所以新来源沿用 `ext:pi-web-access-lean/web_access`；不能改成含 `@gfgghgftgffg/` 的 selector。搜索配置针对新门面，不是直接启用 `pi-web-access`。不要仅因父会话能联网就假定子会话也能。
 
 在仓库执行 `npm ci`，编辑同一份 `routing.toml`。`model` 写注册表中的原始模型 ID，`provider` 单独写 provider ID，不附加 thinking 后缀。Codex/Pi 的 provider ID 若不同，可通过 `--config` 选择独立源配置，生成器和契约仍共用。
 
@@ -93,7 +106,7 @@ subagent({
 
 lean 使用 `op/prompt/subagent_type/run_in_background/input`，不是旧 `agent/task/context/async/action`。直接派发的 model 和 thinking 是**分开的参数**；`input` 是 JSON 对象字符串，直接字段覆盖同名 JSON 字段。原生 workflow 使用 `agentType/model/effort`，不能附加 `:thinking` 后缀。
 
-直接 thinking 支持 off/minimal/low/medium/high/xhigh/max。上游 0.19.0 的 workflow effort **不接受 off**：off 候选仅能直接运行，涉及原生 workflow 时应报告不支持，不能省略 effort 后继承另一档位或静默换协议。
+直接 thinking 支持 off/minimal/low/medium/high/xhigh/max；具体模型仍须按 registry 核验。审查基线引擎 0.22.0 的 workflow effort **不接受 off**：off 候选仅能直接运行，涉及原生 workflow 时应报告不支持，不能省略 effort 后继承另一档位或静默换协议。
 
 上游允许模糊匹配、跨 provider 回退和 thinking clamping，Router 政策禁止依赖它们。必须事前核对精确可用 ID 和档位，并在验收前检查实际子会话的 model/thinking；请求参数和子模型自述都不是执行证据。发生变化时报告基础设施故障，不把替代模型当作成功。
 
@@ -144,13 +157,13 @@ return { outcomes, executionIncomplete: outcomes.some(item => item.finding === n
 - 原生 workflow 总是后台；每个 run 并发上限为 `max(1, min(16, cpus - 2))`，没有可设置的 globalConcurrencyLimit。Router 的 max_concurrent 是额外协调上限；小于宿主上限时分批并 await，不能通过多个 workflow 绕过。
 - 直接后台 Agent 受 `subagents.json maxConcurrent` 限制（默认 10）。workflow 子 Agent 不占这个池，不能声称它们共享一个全会话硬上限；主线程仍应合计约束两类活跃子 Agent 和流水线重叠阶段。
 - 共享目录只有一个 writer。并行写入需要独立 worktree 和明确所有权；读正在变化的内容必须等待 writer。
-- `isolation: "worktree"` 使用提交后的 HEAD，看不到未提交/暂存 diff；没有 baseRef。先检查全局/项目 worktreeIsolation 未禁用，否则引擎可能静默丢弃隔离请求。
+- `isolation: "worktree"` 使用提交后的 HEAD，看不到未提交/暂存 diff；没有 baseRef。先检查全局/项目 worktreeIsolation 未禁用，否则引擎可能静默丢弃隔离请求。Agent 文件的 `isolated` 优先于 caller，且会影响 direct/workflow 子任务；direct 的 isolation 也可被文件覆盖，workflow worktree 仍由脚本选项决定。`isolated` 是禁用扩展/MCP，不等于 worktree 或 OS sandbox；不能为修复加载故障而随意设置。子会话继承父项目 trust，换 cwd/worktree 不自动信任目标目录。
 - 修改在完成时保存成 `pi-agent-*` 本地分支，临时 worktree 随后移除。父 Agent 用分支交接集成；不要使用已删除的路径。gate 在 worktree 清理前运行，Windows gate 使用 cmd。
 - 直接结果查询为 `op: "result", agent_id`；活跃直接子 Agent 为 `op: "steer", agent_id, message`；完成后的续聊用 `op: "run"` 的 input resume ID。先核对存储模型、工具、定义和 baseline。
 - workflow 内通过 `agent(prompt, { resume: "原label" })` 续聊；不可同时传 model/effort/agentType 等。工作流子 Agent 不可用直接 result/steer 管理，运行管理在 `/agents → Workflows`。
 - `resumeFromRunId` 是同会话内 journal 前缀重放，不是子会话续聊，也不支持跨会话恢复。磁盘重开的 mentions 会重读当前角色定义，不能保证历史工具契约不变。
 - 新任务 fresh，coder/verifier 独立；生成角色固定不继承父对话。不支持保持契约的 fork 就报告不支持。
-- 原生后台完成有通知；只剩等待工作时让出控制，不轮询/sleep，也不换前台、CLI 或其他引擎。
+- 原生后台完成有通知；0.22.0 的 smart/async join 不等待同批兄弟任务全部结束，通知可能只含已完成的一部分。忙碌父线程在工具批次边界收到，正在执行的工具不会被打断；不要把单条通知当作所有 writer 都已停止。group join 是单独设置，不是调用参数，不能静默修改。读取已完成 direct 结果可抑制尚未送达的对应通知，应按 run ID 跟踪而不是数通知条数。只剩等待工作时让出控制，不轮询/sleep，也不换前台、CLI 或其他引擎。
 
 详细规则在 [Pi execution](../skill/pi/execution.md)，安装后位于 `skills/task-routing/references/pi-execution.md`。
 
@@ -166,7 +179,9 @@ return { outcomes, executionIncomplete: outcomes.some(item => item.finding === n
 
 所有角色保持 `extensions: true`，保留 provider/权限扩展的生命周期 hooks；`skills: false`、`allowed_subagents: none`。仅指定内置 tools 不会关闭上游默认的扩展工具继承，因此每个角色都使用 ext 选择器建立明确白名单。
 
-`ext:pi-subagents-lean/subagent` 配合 `disallowed_tools: subagent, ...` 是有意的“选入后拒绝”：以必装执行插件打开 closed 扩展工具范围，同时禁止该门面及其他编排工具。search 另外仅选 `ext:pi-web-access-lean/web_access`。这样不需要关闭所有扩展来阻止工具泄漏。
+`ext:pi-subagents-lean/subagent` 配合 `disallowed_tools: subagent, ...` 是有意的“选入后拒绝”：以必装执行插件打开 closed 扩展工具范围，同时禁止该门面及其他编排工具。search 另外仅选 `ext:pi-web-access-lean/web_access`。scope 短名不变不代表旧 `@ssk_dev` 来源仍受支持，必须核对实际包身份。
+
+新引擎在 `extensions: true` 的子会话加载 builtin codemode、tool_search 和 MCP，每个子会话可以启动自己的 MCP 服务。closed scope 应排除未选入的工具，并在迟注册、exposure/defaultActive、tool_search 激活和嵌套 `ctx.executeTool` 调用时继续生效；只检查声明/active 列表还不够。白名单不阻止 factory/hooks/MCP 进程执行，不能声称所有 MCP 被关闭。用户可明确选择 `exclude_extensions: builtin:mcp` 等限制，但 Router 不自动改这些设置，也不关闭所有扩展来绕过作用域故障。
 
 工具白名单不是 OS sandbox。verify 的 bash 能产生检查产物，也有能力改源码；不改产品/测试源码是契约而非文件系统禁令。扩展 factory 仍可能执行，不能将工具范围当成隔离不可信扩展的安全边界。
 
@@ -198,15 +213,31 @@ node cli.mjs doctor --host pi --catalog pi-registry.json
 node cli.mjs install --host pi --catalog pi-registry.json --apply
 ```
 
-doctor 读取 `<pi-home>/subagents.json` 以及**命令当前目录**的 `.pi/subagents.json`，提示未知角色回退、off workflow 限制、禁用 worktree 和旧设置。`workflowsEnabled: false` 只警告脚本化阶段不可用，不阻止直接调度的安装；用户明确要求 workflow 时仍须报告不支持，不能伪装为等价执行。检查别的工作项目时，从该项目调用仓库 CLI 的绝对路径。静态 CLI 不证明有效角色覆盖、扩展加载或凭据/服务可达。
+doctor 读取 `<pi-home>/subagents.json` 以及**命令当前目录**的 `.pi/subagents.json`，提示旧安装来源、未知角色回退、off workflow 限制、禁用 worktree 和旧设置。安装来源提示只看静态声明，不证明扩展已加载或版本正确；项目包发现和 trust 仍须在实际会话核对。`workflowsEnabled: false` 只警告脚本化阶段不可用，不阻止直接调度的安装；`packageWorkflows: false` 不能据此判定脚本执行器不可用。用户明确要求 workflow 时仍须报告不支持，不能伪装为等价执行。检查别的工作项目时，从该项目调用仓库 CLI 的绝对路径。静态 CLI 不证明有效角色覆盖、扩展加载或凭据/服务可达。
 
 Pi 中用 `/agents` 和 `subagent({ op: "help", input: "run" })` 检查加载及 schema；`pi --list-models` 列出可用模型但不证明 thinking 档位。此引擎没有旧 `/subagents-doctor`、`/subagents-models` 或 action 模型查询。实际模型和有效 thinking 应读子 session/invocation 或 workflow inspector，尤其注意 asked 与实际值不同的情况。
 
-此前后端迁移验证包括 13 个真实候选的模型/档位/精确工具集合、fresh context、三个原测试不变的编码夹具与独立验收、按次模型覆盖、联网 fetch 官方文档，以及原生 parallel/pipeline/同子会话续聊。未进行模型质量 A/B；联网 fetch 不代表所有搜索服务账号都已验证。`npm test` 的回归只使用隔离本地夹具，不调用远端模型。
+此前 **0.19.4 / 0.19.0 旧后端**迁移验证包括 13 个真实候选的模型/档位/精确工具集合、fresh context、三个原测试不变的编码夹具与独立验收、按次模型覆盖、联网 fetch 官方文档，以及原生 parallel/pipeline/同子会话续聊。未进行模型质量 A/B；联网 fetch 不代表所有搜索服务账号都已验证。`npm test` 的回归只使用隔离本地夹具，不调用远端模型。
+
+本次 amox `v0.1.2` 适配在 Node 22.23.3、Pi SDK 1.2.0 上完成隔离 production 包安装、80 项离线回归和 SDK 加载检查：只注册 `subagent`/`web_access` 两个门面，发现全部 13 个 Router 候选，检查真实 help/schema、角色解析和无派发的 result/error 路径。工具作用域检查调用实际 0.22.0 引擎函数，session 边界使用测试替身，覆盖五角色精确工具集合、builtin/deferred 工具、迟注册、直接调用 veto、嵌套 gate 和原权限 hook 保留。未调用真实模型、启动实际子 Agent/MCP 服务，也未验证交互式通知时序、GLM 可达性或端到端派发。
+
+可选探针需提供已经安装的可信包目录，普通 `npm test` 和静态 CLI 不会加载它们：
+
+```sh
+node scripts/check-pi-runtime.mjs "<Pi SDK 包目录>" "<amox subagents 包目录>" "<amox web-access 包目录>"
+```
+
+此命令在临时 home 加载扩展代码（factory 具有完整 OS 权限），不读取个人认证或修改个人安装。路径指向包目录中的 `package.json`，不是 workspace 根目录；未安装的包需先单独安装。检查结果不是模型档位或真实权限环境的保证。
 
 lean 的 token 宣传针对工具 schema/提示词贡献，使用字符估计且以空配置测量；它不代表本路由会话固定只用 275 tokens，也不是 provider 账单或子 Agent 执行成本的承诺。
 
 阶段级编排回归检查两宿主的政策产物、四种能力组合、批处理条件、阶段交接、验收/修复/并发边界和禁用 workflow 后的直接安装。它们是离线内容及安装检查，不代表模型必然遵守。另在 Pi 1.0.3 上用 `sub2api/gpt-6.1-sol / xhigh` 的 12 个 fresh 父上下文做决策检查，覆盖两种能力都有、只有 subagents、只有 workflow、两者都没有，以及用户明确选型、故障和独立验收要求，12/12 符合预期。能力组合由测试 brief 声明，执行工具禁用，没有实际启动子 Agent/workflow；这不等于端到端执行、任意插件 API 兼容或普遍可靠性保证。
+
+## 升级扩展与兼容性维护
+
+依赖安装由扩展仓库维护，Router 的 `package.json` 不直接依赖 Pi 或执行引擎；静态 CLI 不应因此加载扩展或访问认证。更新扩展后再次安装 Router 产物并 reload，不会自动更改 `routing.toml`、provider、父模型、权限或已运行子任务。
+
+升级时核对包名、Pi peer 下限、真实 help/schema、frontmatter 优先级、角色发现/trust、工具作用域、通知与生命周期、隔离/续聊和并发。`subagent` 工具名和无 scope selector 不变，不代表内部行为不变。新版本未验证的部分应明确记录，不能用旧版真实派发或离线通过冒充新版本端到端验证。
 
 ## 托管文件与更新
 

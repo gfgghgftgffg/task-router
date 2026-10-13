@@ -7,7 +7,9 @@ Task Router 用一个 `routing.toml` 定义一个 orchestrator 和五个职责�
 | 宿主 | 执行方式 | 安装产物 |
 | --- | --- | --- |
 | Codex | 原生子 Agent（V1 通讯），并行任务复用 worktree | 独立 profile、TOML 角色、按需加载的 Skill |
-| Pi + [pi-subagents-lean](https://github.com/kunkun9527/pi-subagents-lean) | Router 自己的 `tr_*` 角色，经 lean 门面和 [tintinweb 引擎](https://github.com/tintinweb/pi-subagents)派发，不覆盖内置角色 | 扁平 Markdown 角色、按需加载的 Skill |
+| Pi + [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean) | Router 自己的 `tr_*` 角色，由该仓库维护的 `@gfgghgftgffg/pi-subagents-lean` 派发，不覆盖内置角色 | 扁平 Markdown 角色、按需加载的 Skill |
+
+Pi 的执行和搜索扩展统一使用 amox 仓库的安装来源；底层引擎、版本及兼容边界见 [Pi 适配](docs/pi.md)。
 
 安装器只写自己管理的文件：默认先预览，`--apply` 才写入，写入前做备份和并发校验。不改写 Codex 的 `config.toml`、Pi 的 `settings.json`，也不碰认证和 provider 配置。
 
@@ -56,15 +58,19 @@ npm ci
 
 ### Pi
 
-1. 安装执行与联网检索依赖（本仓库不代装）。如果已安装旧 `pi-subagents`，先移除，避免同名工具冲突：
+1. 安装执行与联网检索依赖（本仓库不代装）。使用 [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean) 的独立安装脚本，要求 Pi >=1.1.0、Node >=22.19.0、npm 和 Git。该项目不发布 npm 包；不能把仓库根目录当作单个 Pi 扩展安装。
+
+   先用 `pi list` 核对旧来源，移除被替换的 subagents/web-access 门面，保留 provider 和其他扩展。具体迁移命令见 [Pi 安装](docs/pi.md#安装)。首次克隆到 Task Router 的同级目录后，在 Task Router 目录执行：
 
    ```sh
-   pi remove npm:pi-subagents             # 仅旧版用户需要
-   pi install npm:@ssk_dev/pi-subagents-lean@0.19.4
-   pi install npm:@ssk_dev/pi-web-access-lean
+   git clone https://github.com/gfgghgftgffg/amox_pi_extensions_lean.git ../amox_pi_extensions_lean
+   node ../amox_pi_extensions_lean/scripts/install-extension.mjs pi-subagents-lean
+   node ../amox_pi_extensions_lean/scripts/install-extension.mjs pi-web-access-lean
    ```
 
-   lean 版依赖 `@tintinweb/pi-subagents`，不是原插件的轻量模式。插件替换后先 `/reload` 或重启 Pi；不要同时加载多个 subagents/web-access 门面。建议在 `~/.pi/agent/subagents.json` 合并 `"fallbackSubagent": "none"`、`"strictAgentFiles": true`、`"workflowsEnabled": true`，保留原有设置；安装器不代改这些选项。详见 [Pi 安装](docs/pi.md#安装)。
+   已有副本先在扩展仓库安全更新，不必重复 clone。当前审查基线为 `v0.1.2`（subagents 引擎 0.22.0）；复现该版本可先切到对应 tag。安装脚本按包安装，无需扩展仓库根目录 `npm ci`，Router 也不要求 `rpiv-todo-lean`。
+
+   插件替换后 `/reload` 或重启 Pi；不要同时加载多个门面或另行启用上游依赖。建议在 `~/.pi/agent/subagents.json` 合并 `"fallbackSubagent": "none"`、`"strictAgentFiles": true`、`"workflowsEnabled": true`，保留原有设置；安装器不代改这些选项。新引擎还会发现已安装包内的 Agent/workflow，须检查实际角色来源、项目 trust 和工具作用域。详见 [Pi 适配](docs/pi.md)。
 
 2. 编辑同一个 [`routing.toml`](routing.toml)。Pi 的模型和强度保存在生成的角色映射中，每次派发都显式传入，角色 frontmatter 不锁死模型。provider、thinking 和临时覆盖规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
 

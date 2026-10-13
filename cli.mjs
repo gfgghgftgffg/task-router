@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { ROOT, loadConfig, render, inspectCatalog, readBaseInstructions, defaultCodexHome, planInstall, applyInstall } from './src/router.mjs';
-import { defaultPiHome, renderPi, inspectPiCatalog, readPiSettings, planPiInstall, piModel } from './src/pi.mjs';
+import { defaultPiHome, renderPi, inspectPiCatalog, readPiSettings, planPiInstall, piModel, PI_RUNTIME, PI_WEB_RUNTIME, PI_RUNTIME_REPOSITORY } from './src/pi.mjs';
 
 const HELP = `Task router (Node.js 22+)
 
@@ -15,7 +15,8 @@ node cli.mjs install [--host codex|pi] [--config routing.toml] [--apply]
 Default build output: dist for Codex, dist/pi for Pi.
 build writes an isolated bundle; install previews unless --apply is supplied.
 Codex: separate profile, TOML roles and skill; config.toml is never rewritten.
-Pi: own tr_* Markdown agents and opt-in skill through @ssk_dev/pi-subagents-lean;
+Pi: own tr_* Markdown agents and opt-in skill through ${PI_RUNTIME};
+install the execution/search extensions separately from ${PI_RUNTIME_REPOSITORY}.
 settings.json, builtin agents and credentials are never rewritten.
 Pi --catalog expects a credential-free registry snapshot (see docs/pi.md).
 `;
@@ -48,7 +49,7 @@ function runPi(command, c, values) {
   if (values.apply) {
     const result = applyInstall(changes, home);
     console.log(`Installed ${result.written} Pi files.${result.backup ? ` Backup: ${result.backup}` : ''}`);
-    console.log('Install/load @ssk_dev/pi-subagents-lean and @ssk_dev/pi-web-access-lean separately; run /reload or start a new Pi session.');
+    console.log(`Install/load ${PI_RUNTIME} and ${PI_WEB_RUNTIME} separately via ${PI_RUNTIME_REPOSITORY}'s scripts/install-extension.mjs (pi-subagents-lean / pi-web-access-lean); run /reload or start a new Pi session.`);
     console.log(`Parent startup choice: model ${piModel(c.orchestrator)}; thinking ${c.orchestrator.effort}.`);
     console.log('Activate in the working project: /skill:task-routing <task>. Installation does not activate routing.');
   } else console.log('Preview only. Add --apply to install.');

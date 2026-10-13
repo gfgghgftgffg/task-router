@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Task Routing for Pi
 
-This is the parent policy for Task Router's own `tr_*` agents. The executor is `@ssk_dev/pi-subagents-lean`, a facade over `@tintinweb/pi-subagents`, NOT nicobailon's `pi-subagents`. Do not substitute builtin personas. An assigned child follows its brief without activating this policy or delegating further.
+This is the parent policy for Task Router's own `tr_*` agents. The executor is `@gfgghgftgffg/pi-subagents-lean` from amox_pi_extensions_lean, a facade over `@tintinweb/pi-subagents`, NOT nicobailon's `pi-subagents`. Reviewed baseline: v0.1.2 / engine 0.22.0 / Pi >=1.1.0; inspect the actual installed version and schema rather than assuming future releases are identical. Do not substitute builtin personas. An assigned child follows its brief without activating this policy or delegating further.
 
 Installation is not activation or delegation authority. Apply this policy only when the operator invokes `/skill:task-routing` or applicable instructions explicitly enable it. User instructions, project constraints and host permissions take precedence. Otherwise keep the existing workflow.
 
@@ -38,7 +38,7 @@ Reassess at safe phase boundaries; do not lock the entire task into one shape. P
 
 ## Preflight
 
-Before first use, inspect the available operations and selected operation's installed schema. For lean, use `subagent({ op: "help", input: "run" })` when direct runs are available, or `input: "workflow"` for a workflow-only surface. `/agents` is the operator UI. There is no `action: list/models/doctor/guide` API. Check the selected flat `agents/tr_*.md` and any same-name definitions in the project's `.agents/agents/` and `.pi/agents/` (the latter wins). Refuse unexpected pins, tools, nested delegation or permissions. Reload after installation so the facade's startup type list is current.
+Before first use, inspect the available operations and selected operation's installed schema. For lean, use `subagent({ op: "help", input: "run" })` when direct runs are available, or `input: "workflow"` for a workflow-only surface. `/agents` is the operator UI. There is no `action: list/models/doctor/guide` API. Check the effective selected flat `agents/tr_*.md` and its origin: package agents rank above builtins but below global, workspace `.agents/agents/` and project `.pi/agents/` definitions (the latter wins). Refuse unexpected model/thinking pins, isolated/isolation, exclude_extensions, tools, nested delegation or permissions. Package discovery defaults on under packageAgents/packageWorkflows; inspect these controls without changing them. Reload after installation or discovery/trust changes so the facade's startup type list is current. Children inherit parent project trust; a different cwd/worktree is not automatically trusted.
 
 Resolve an omitted provider from the ACTIVE parent provider, never a sibling candidate or a recommended startup model. Confirm the EXACT available `provider/id` and supported thinking in live Pi metadata or a current credential-free registry snapshot checked by Router doctor. `pi --list-models` lists available models without a model prompt, but does not establish thinking support. A stale snapshot is not current evidence. If exact availability/support cannot be established, report that blocker before relying on the route.
 
@@ -65,13 +65,13 @@ Use real registered models and configured thinking, not example placeholders. `i
 
 Briefs include objective, repo/cwd/branch/ref, edit ownership, applicable project/global instructions, confirmed sources/interfaces, acceptance criteria, validation, expected report and stop conditions. `prompt_mode: replace` does NOT inherit AGENTS.md/CLAUDE.md. The parent reads and supplies relevant constraints; do not claim automatic inheritance or widen tools to compensate. Generated contexts are fresh with skills and nested delegation disabled.
 
-Read [Pi execution](references/pi-execution.md) for either mode. In direct coordination, issue multiple `op: "run"` calls for independent work, use completion results to decide successors, and use supported steer/resume for focused follow-ups. This does not need an enclosing workflow.
+Read [Pi execution](references/pi-execution.md) for either mode. In direct coordination, issue multiple `op: "run"` calls for independent work, use completion results to decide successors, and use supported steer/resume for focused follow-ups. This does not need an enclosing workflow. Smart/async join can notify a completed subset before siblings finish; track outstanding children and writers instead of treating one notification as the entire batch completing.
 
 When a scripted phase is selected, use one native lean `op: "workflow"` with `agent()/parallel()/pipeline()`, explicitly selecting `tr_*`, exact models and efforts. Do not use the separate Dynamic Workflows tool, old `runs.*`, or Codex dispatch tools. Respect the aggregate Router and stricter host concurrency limits across both modes.
 
 Continue related work with its suitable known owner only after checking stored route, current definition, tools, cwd and baseline. Independent work and changed routes start fresh. Coder/verifier contexts are always independent.
 
-Search exposes `web_access` from `@ssk_dev/pi-web-access-lean`, supporting search/check/fetch/get; no shell/edit/write. Reasoning also has no mutation tools. Verify has bash for checks but no edit/write: no-source-edit is policy, not an OS sandbox. Preserve permission-extension hooks; do not switch to foreground or disable extensions to bypass a setup failure.
+Search exposes `web_access` from `@gfgghgftgffg/pi-web-access-lean`, supporting search/check/fetch/get; no shell/edit/write. Reasoning also has no mutation tools. Verify has bash for checks but no edit/write: no-source-edit is policy, not an OS sandbox. With extensions enabled, children also load builtin codemode/tool_search/MCP; verify the closed ext: scope gates unlisted tools, including deferred and nested ctx.executeTool calls. MCP processes can still start. Preserve permission/provider hooks; do not switch to foreground, set isolated or disable extensions/trust checks to bypass a setup failure.
 
 Lean has no `contact_supervisor` channel. A blocked child reports the question and stops; the parent resolves it and resumes when eligible, rather than pretending a blocking supervisor request is pending.
 

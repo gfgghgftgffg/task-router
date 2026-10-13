@@ -14,7 +14,7 @@ effort = "medium"
 # An explicit id must be a lowercase safe identifier starting with a letter and cannot be "default".
 # All candidates share the role contract and sandbox.
 [roles.coding]
-model = "deepseek-flash"
+model = "glm-5.3"
 effort = "max"
 when = "Default implementation with clear boundaries; use a stronger candidate for complex judgment or cross-module coordination"
 options = [

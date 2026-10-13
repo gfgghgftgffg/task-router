@@ -6,7 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { stringify } from 'smol-toml';
 import { ROOT, ROLE_META, loadConfig, getRoleChoices, render, applyInstall } from '../src/router.mjs';
-import { PI_THINKING, PI_MARKERS, PI_MANIFEST, PI_ROLE_TOOLS, PI_DENIED_TOOLS, renderPi, planPiInstall, inspectPiCatalog, readPiRuntimeSettings } from '../src/pi.mjs';
+import { PI_THINKING, PI_MARKERS, PI_MANIFEST, PI_RUNTIME, PI_WEB_RUNTIME, PI_RUNTIME_REPOSITORY, PI_ROLE_TOOLS, PI_DENIED_TOOLS, renderPi, planPiInstall, inspectPiCatalog, readPiRuntimeSettings } from '../src/pi.mjs';
 
 function config() {
   const c = loadConfig(path.join(ROOT, 'routing.toml'));
@@ -321,7 +321,10 @@ test('CLI Pi build is isolated, install previews and host flags are checked', t 
   const preview = cli('install', '--host', 'pi', '--config', filename, '--pi-home', home); assert.equal(preview.status, 0, preview.stderr);
   assert.match(preview.stdout, /Preview only/); assert.equal(fs.existsSync(home), false);
   const applied = cli('install', '--host', 'pi', '--config', filename, '--pi-home', home, '--apply'); assert.equal(applied.status, 0, applied.stderr);
-  assert.match(applied.stdout, /Installation does not activate routing/); assert.match(applied.stdout, /@ssk_dev\/pi-subagents-lean/);
+  assert.match(applied.stdout, /Installation does not activate routing/);
+  assert.ok(applied.stdout.includes(PI_RUNTIME)); assert.ok(applied.stdout.includes(PI_WEB_RUNTIME));
+  assert.ok(applied.stdout.includes(PI_RUNTIME_REPOSITORY)); assert.match(applied.stdout, /scripts\/install-extension\.mjs/);
+  assert.doesNotMatch(applied.stdout, /Install\/load @ssk_dev|pi install npm:@gfgghgftgffg/);
   assert.equal(cli('doctor', '--host', 'unknown').status, 1); assert.equal(cli('install', '--host', 'pi', '--codex-home', home).status, 1);
   assert.equal(cli('install', '--pi-home', home).status, 1); assert.equal(cli('build', '--host', 'pi', '--pi-home', home, '--out', home).status, 1);
 });

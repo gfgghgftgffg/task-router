@@ -1,12 +1,12 @@
 # Pi execution
 
-Task Router executes through `@ssk_dev/pi-subagents-lean` over tintinweb's engine. This reference describes its native API, not a new scheduler. Inspect `subagent({ op: "help", input: "workflow" })` when the installed schema is unclear.
+Task Router executes through `@gfgghgftgffg/pi-subagents-lean` from amox_pi_extensions_lean over tintinweb's engine. Reviewed baseline: wrapper v0.1.2, engine 0.22.0, Pi >=1.1.0. This reference describes that API, not a new scheduler or a guarantee for future versions. Inspect the actual installed package and `subagent({ op: "help", input: "workflow" })` when the schema is unclear.
 
 ## Direct coordination
 
 Choose the phase's shape under [phase-level orchestration](orchestration.md), based on available operations rather than host/plugin names. Multi-agent or multi-step work does not require a workflow. When direct subagents are available, the parent can coordinate them through lean's run/result/steer and eligible resume; with both modes available, prefer this for open-ended investigation, short named assignments or frequent direction changes.
 
-Launch independent assignments with multiple `op: "run"` tool calls in the same turn, each selecting its own named candidate and explicit model/thinking under the Skill's cold-start brief and preflight rules. Both run in the background; neither needs an enclosing script. Read results when completion notifications arrive, then decide and launch only the dependent follow-ups needed. Do not poll or assume a pending result.
+Launch independent assignments with multiple `op: "run"` tool calls in the same turn, each selecting its own named candidate and explicit model/thinking under the Skill's cold-start brief and preflight rules. Both run in the background; neither needs an enclosing script. Read results when completion notifications arrive, then decide and launch only the dependent follow-ups needed. In engine 0.22.0, smart/async join does not wait for siblings; one notification may describe only the completed subset. Track each outstanding child/writer before handoff. Group join is a separate setting, not a tool argument; do not change it silently. Do not poll or assume a pending result.
 
 For a bounded fix, launch the coder directly, then a separate verifier after target writes stop. Send actionable FAIL/INCOMPLETE findings to the parent; resume the eligible coder with a focused repair brief and recheck independently under the original criteria and configured repair limit. Neither two roles nor a repair loop requires a workflow.
 
@@ -32,7 +32,7 @@ The script starts with a pure-literal `export const meta = { name, description }
 - `await pipeline(items, ...stages)` for per-item dependencies. Stages receive `(previousResult, originalItem, index)` and can overlap across items;
 - `phase(title)`, `log(message)` and `args` for organization. Declare used phases in meta; use the `phase` option inside concurrent stages to avoid ambient-phase races.
 
-Always select the named candidate and both route fields from [the role map](role-map.md). Native workflow effort accepts minimal/low/medium/high/xhigh/max, but NOT off in upstream 0.19.0. An off route is valid for direct runs only: report unsupported workflow routing instead of dropping effort, inheriting a level or silently changing execution protocol. A missing `agentType` defaults to general-purpose. No `runs.run`, `runs.all`, `async`, `context`, `output`, `cwd`, `baseRef`, `globalConcurrencyLimit` or top-level Dynamic Workflows options belong to this API.
+Always select the named candidate and both route fields from [the role map](role-map.md). Native workflow effort accepts minimal/low/medium/high/xhigh/max, but NOT off in reviewed engine 0.22.0. An off route is valid for direct runs only: report unsupported workflow routing instead of dropping effort, inheriting a level or silently changing execution protocol. A missing `agentType` defaults to general-purpose. No `runs.run`, `runs.all`, `async`, `context`, `output`, `cwd`, `baseRef`, `globalConcurrencyLimit` or top-level Dynamic Workflows options belong to this API.
 
 `agent()` returns final text (or a validated object with `schema`), NOT a receipt with `.ok/.output`. A terminal failure or user skip returns `null`; throws inside parallel/pipeline may also become null. Check every required result and stop dependent stages on null. Do not filter failed acceptance checks out and report a partial batch as success. Return a JSON-safe aggregate explicitly. A successful string is still not a verifier verdict; capture actual checks and independent acceptance.
 
@@ -52,7 +52,7 @@ Direct background agents also obey the engine's session maxConcurrent (default 1
 
 Keep one writer per shared cwd/worktree. Readers of changing content depend on the writer. Independent concurrent writers need managed worktrees with distinct ownership.
 
-`isolation: "worktree"` starts from committed HEAD; it cannot see staged/uncommitted changes and has no baseRef parameter. Never use it to review an uncommitted diff. Check `worktreeIsolation` is enabled in both effective global/project settings BEFORE requesting isolation: the engine can silently drop the option when disabled. A creation failure is a blocker, not permission to run unisolated.
+`isolation: "worktree"` starts from committed HEAD; it cannot see staged/uncommitted changes and has no baseRef parameter. Never use it to review an uncommitted diff. Check `worktreeIsolation` is enabled in both effective global/project settings BEFORE requesting isolation: the engine can silently drop the option when disabled. Agent-file `isolated` overrides the caller for both direct and workflow children; direct isolation can also be overridden by the file, while workflow worktrees remain controlled by the script's isolation option. `isolated` means disabling extension/MCP tools, not a worktree or OS sandbox; an unexpected value can remove provider/permission hooks. Verify the effective definition and actual isolation. A creation failure is a blocker, not permission to run unisolated. Children inherit parent project trust; a different spawn directory does not become trusted automatically.
 
 The engine preserves changed work as a local `pi-agent-*` branch, then removes the temporary worktree. Consume the returned branch/handoff, not a stale directory path. The parent owns integration and affected acceptance. Bash is not confined to the copy by an OS sandbox.
 
@@ -69,9 +69,15 @@ Inside a workflow, label the original child and continue it with `await agent("f
 
 Workflow children are owned by their workflow and invisible to direct result/steer tools. Use the native inspector to stop/pause/retry a live workflow; do not invent workflow_control or runs.steer endpoints for this runtime.
 
+## Effective definitions and tool scope
+
+Engine 0.22.0 discovers declared agents/workflows from installed Pi packages. Package definitions outrank builtins but rank below global, workspace and project files. Inspect /agents origin and the actual selected definition, not just the name. packageAgents/packageWorkflows default on and can be restricted independently; a package declared only by an untrusted project is invisible. strictAgentFiles does not make malformed package files fatal. Do not change these gates or grant trust as a workaround; reload after discovery/trust changes.
+
+Keep extensions enabled for provider/permission hooks, skills disabled and nested delegation denied. The ext: selectors use unscoped package short names, not @scope/name; they close tool exposure, not extension execution. With extensions: true, builtin codemode/tool_search/MCP can load and each child can start MCP servers. Unlisted tools must remain unavailable across exposure/defaultActive changes, late registration, tool_search activation and nested ctx.executeTool calls. Check both active tools and call-time scope; do not assume a hidden declaration means a tool cannot be invoked. Do not disable all extensions to hide a scope failure.
+
 ## Evidence and failures
 
-While a child writes, the parent may inspect unaffected material, but must not edit that checkout. Background runs deliver native notifications. When only pending children remain, yield: never sleep, poll or use another engine merely to wait.
+While a child writes, the parent may inspect unaffected material, but must not edit that checkout. Background runs deliver native notifications at parent boundaries without interrupting running tools. Smart/async completion messages need not wait for the batch; reading a completed direct result before its notification is delivered suppresses that notification. Track result/run IDs rather than counting messages, and do not use an early result read as polling. When only pending children remain, yield: never sleep, poll or use another engine merely to wait.
 
 There is no supervisor RPC or contact_supervisor tool. A child reports blockers/questions and stops; the parent resolves and resumes when eligible. A steering delivery is not proof of compliance.
 
