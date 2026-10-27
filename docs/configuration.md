@@ -2,7 +2,7 @@
 
 [返回 README](../README.md)
 
-本页针对 Codex 后端。命令默认 `--host codex`，保持原有行为；Pi 安装、thinking 映射和 amox-pi-extensions-lean 派发规则见 [Pi 适配](pi.md)。
+本页说明 Codex 后端，命令默认使用 `--host codex`。Pi 安装、thinking 映射和派发规则见 [Pi 适配](pi.md)。
 
 ## 模型目录与 V1 兼容
 
@@ -19,7 +19,7 @@
 
 在 Codex CLI 0.159 中，仅设置 `multi_agent_v2 = false` 不足以覆盖模型目录中显式的 `"multi_agent_version": "v2"`。修改功能开关或模型目录后，需要启动新会话。安装器不会自动改写这些设置，`doctor` 也不会检查通讯版本。
 
-现有原生配置曾在 Codex CLI 0.156.1 上做过解析验证，字段参考 [Codex 0.156.1 schema](https://github.com/openai/codex/blob/rust-v0.156.1/codex-rs/core/config.schema.json)。上述 V1 开关行为和下文的指令替换语义对应 CLI 0.159；其他版本、provider 与宿主需要分别确认兼容性。桌面应用没有 profile 入口时，安装不会使其自动启用。
+原生配置字段可查阅 [Codex 0.156.1 schema](https://github.com/openai/codex/blob/rust-v0.156.1/codex-rs/core/config.schema.json)。上述 V1 开关行为和下文的指令替换语义对应 CLI 0.159；使用其他版本、provider 或宿主时，需分别确认兼容性。桌面应用没有 profile 入口时，安装不会使其自动启用。
 
 ## 配置优先与临时覆盖
 
@@ -47,16 +47,23 @@ provider 可在 `orchestrator`、角色默认候选或单个 `options` 项上设
 | --- | --- |
 | `version` | 当前必须为 `1` |
 | `profile` | profile 名称，当前示例为 `task-routing`；以小写字母开头，只含小写字母、数字、`-`，最长 48 字符 |
-| `max_concurrent` | 全会话并发子 Agent 上限，范围 `1..32`，当前配置为 `30` |
+| `max_concurrent` | 主 Agent 协调的全会话并发子 Agent 上限，范围 `1..32`，当前配置为 `30`；仍须遵守宿主更低的限制 |
 | `max_coding_repairs` | 每个工作单元首次实现之后的编码修复跟进上限，范围 `0..5`，当前配置为 `5` |
 
 并发上限不要求每次创建相应数量的子 Agent。修复次数耗尽后交回主 Agent 判断。完整选择提示见 [`routing.toml`](../routing.toml)，职责和工作流程见 [Skill](../skill/SKILL.md)。
 
 ## 阶段级编排
 
-编排形态与模型选档分开，先检查实际可用能力，不按宿主、插件名字、Agent 数量或步骤数量一刀切：两种能力都有时按阶段的决策结构选；只有 subagents 时由主线程协调并行、依赖和批次；只有 workflow 时用较短阶段返回证据、再决定后继任务；两者都没有时，只在主线程处理允许自行完成的部分并报告缺失的委派/验收能力。
+模型选档与编排方式分别判断。派发前检查实际可用能力，再选择当前阶段的做法：
 
-能力在派发前检查，不是先调用不存在的工具失败后再回退。用户明确要求不可用的执行方式时仍须报告限制。具体调用遵守实际 schema；本后端的执行参考描述原生 spawn、跟进和生命周期工具，不要求其他集成也使用同一 API。“Subagent workflows”这样的文档名称也不能证明脚本执行器存在。所有形态都保持角色、精确模型、权限、独立验收和同一工作单元的修复上限。详见[阶段级编排](../skill/references/orchestration.md)和[并行工作规则](../skill/references/parallel-work.md)。
+- 两种能力都有：按依赖、分支和交互需求选择直接调度或 workflow。
+- 只有 subagents：主线程协调并行、依赖和批次。
+- 只有 workflow：用较短阶段返回证据，再决定后续任务。
+- 两者都没有：主线程只处理允许自行完成的部分，报告缺失的委派或独立验收能力。
+
+宿主名称、插件名称、Agent 数量和步骤数量都不能代替能力检查。用户指定的方式不可用时，应报告限制，不能先调用不存在的工具再回退。
+
+调用须遵守实际工具接口。本后端的执行参考使用原生 spawn、跟进和生命周期工具；其他集成不必使用同一 API。“Subagent workflows”这样的文档名称也不证明脚本执行器存在。各模式都须保留角色、精确模型、权限、独立验收和修复上限。详见[阶段级编排](../skill/references/orchestration.md)和[并行工作规则](../skill/references/parallel-work.md)。
 
 ## Agent 续聊与上下文
 
@@ -70,6 +77,7 @@ provider 可在 `orchestrator`、角色默认候选或单个 `options` 项上设
 
 | 参数 | 适用命令 | 行为 |
 | --- | --- | --- |
+| `--host codex\|pi` | `build`、`doctor`、`install` | 选择后端，默认 `codex`；Pi 参数见 [Pi 适配](pi.md) |
 | `--config <文件路径>` | `build`、`doctor`、`install` | 指定源配置，默认使用本仓库的 `routing.toml` |
 | `--codex-home <目录>` | `doctor`、`install` | 指定检查或安装目标，默认使用 `CODEX_HOME`，未设置时使用 `~/.codex` |
 | `--catalog <文件路径>` | `doctor`、`install` | 指定本次校验使用的模型目录，不改写 Codex 的目录配置 |
@@ -80,6 +88,8 @@ provider 可在 `orchestrator`、角色默认候选或单个 `options` 项上设
 `--out` 只能用于 `build`，`--apply` 只能用于 `install`。
 
 默认不会读取 `~/.codex/routing.toml`。使用多份仓库或自定义配置时，更新应继续指定同一份 `--config`；使用自定义安装目录时，也要保留相同的 `--codex-home` 或 `CODEX_HOME`。
+
+仓库目录名与 `profile` 是两项独立设置。把仓库从 `codex-task-router` 改名为 `task-router` 不会重命名已安装的 profile；引用旧仓库绝对路径的脚本或快捷方式需同步更新。
 
 目录校验优先使用 `--catalog`，其相对路径按执行命令时的工作目录解析；否则读取目标 `config.toml` 的 `model_catalog_json`，其中的相对路径按目标 Codex home 解析。JSON 必须含 `models` 数组，模型以 `slug` 匹配，effort 根据 `supported_reasoning_levels` 检查。更换校验目录不会自动改变运行时目录。
 
@@ -132,6 +142,4 @@ profile 和角色配置按整个文件管理，不合并其中手工添加的 `[
 
 构建后可执行 `node scripts/check-native.mjs <Codex原生可执行文件路径>`。脚本先核对 `dist/` 与当前源配置是否一致，再检查原生配置解析，启动应用服务和临时线程检查角色发现警告，不提交对话轮次或发起模型推理。它也可能发现当前用户目录中的无效角色；更新角色文件后应先同步安装。
 
-阶段级编排改动的离线回归覆盖两宿主产物、安装幂等、四种能力组合和 API 隔离。本次另在本机 Codex CLI 0.160.0 上通过了 profile 与全部 13 个候选的原生配置解析，以及 app-server 临时线程的角色发现检查；未提交模型对话轮次。Pi 主模型的选型场景不属于 Codex 运行测试，上述检查也不等于 Codex 实际子 Agent 派发或端到端行为验证。
-
-原生检查验证解析与角色发现，实际调用还取决于 provider、凭据与宿主能力。测试和构建入口见 [README](../README.md#命令参考与开发入口)。
+离线回归覆盖两宿主产物、安装幂等、四种能力组合和 API 隔离，不证明模型会遵守编排政策。原生检查验证配置解析与角色发现，不提交模型对话轮次，也不验证实际子 Agent 派发。实际调用仍取决于 provider、凭据与宿主能力。测试和构建入口见 [README](../README.md#命令参考与开发入口)。

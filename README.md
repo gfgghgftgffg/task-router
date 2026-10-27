@@ -1,21 +1,17 @@
 # Task Router
 
-Task Router 用一个 `routing.toml` 定义一个 orchestrator 和五个职责角色——`coding`、`search`、`verify`、`reasoning`、`general`——为每个角色配置默认模型和思考强度（Codex 的 effort / Pi 的 thinking），并可为同一角色追加多个候选档位。主 Agent 结合任务复杂度、风险和上下文规模选择档位；coding 完成后由独立的 verify 验收。
+Task Router 用一份 [`routing.toml`](routing.toml) 配置主 Agent、五个职责角色及其模型候选，支持 Codex 和 Pi。主 Agent 根据任务复杂度、风险和上下文选择模型与思考强度；编码结果交给独立的 `verify` 验收。
 
-同一份角色契约和候选配置支持两种宿主，安装器为每个后端分别生成自己的受管文件，互不影响：
-
-| 宿主 | 执行方式 | 安装产物 |
+| 宿主 | 执行方式 | 生成内容 |
 | --- | --- | --- |
-| Codex | 原生子 Agent（V1 通讯），并行任务复用 worktree | 独立 profile、TOML 角色、按需加载的 Skill |
-| Pi + [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean) | Router 自己的 `tr_*` 角色，由该仓库维护的 `@gfgghgftgffg/pi-subagents-lean` 派发，不覆盖内置角色 | 扁平 Markdown 角色、按需加载的 Skill |
+| Codex | 原生 V1 子 Agent | 独立 profile、TOML 角色和 Skill |
+| Pi | [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean) 的 `@gfgghgftgffg/pi-subagents-lean` | 扁平 `tr_*` Markdown 角色和按需启用的 Skill |
 
-Pi 的执行和搜索扩展统一使用 amox 仓库的安装来源；底层引擎、版本及兼容边界见 [Pi 适配](docs/pi.md)。
-
-安装器只写自己管理的文件：默认先预览，`--apply` 才写入，写入前做备份和并发校验。不改写 Codex 的 `config.toml`、Pi 的 `settings.json`，也不碰认证和 provider 配置。
+安装默认只预览，带 `--apply` 才写入。安装器备份将要修改或删除的文件，并检查文件是否被手动改动；不改写 Codex 的 `config.toml`、Pi 的 `settings.json`，也不修改认证或 provider 配置。
 
 ## 快速开始
 
-两种宿主都需要 Node.js 22+ 和一份本仓库副本。所有命令都在仓库目录执行：
+Router CLI 需要 Node.js 22+。Pi 扩展另需 Pi >=1.1.0、Node >=22.19.0、npm 和 Git。先取得仓库并安装依赖，后续命令均在 `task-router` 目录执行：
 
 ```sh
 git clone git@github.com:gfgghgftgffg/task-router.git
@@ -23,11 +19,11 @@ cd task-router
 npm ci
 ```
 
-然后按使用的宿主选择下面的步骤。
+编辑 [`routing.toml`](routing.toml)，把 `orchestrator` 和各 `roles.*` 的 `model`、`effort` 换成自己 provider 支持的值。仓库中的模型名只是示例，不代表你的环境可用。
 
 ### Codex
 
-1. 开启 V1 子 Agent 通讯。把以下内容合并进 `~/.codex/config.toml` 已有的 `[features]` 表，保留其他配置：
+1. 将以下开关合并到 `~/.codex/config.toml` 已有的 `[features]` 表，保留其他配置：
 
    ```toml
    [features]
@@ -35,32 +31,28 @@ npm ci
    multi_agent_v2 = false
    ```
 
-   如果通过 `model_catalog_json` 使用自定义模型目录，主 Agent 和所有可能选用的子模型也必须设置 `"multi_agent_version": "v1"`。仅设置全局 `multi_agent_v2 = false` 不足以覆盖模型条目里显式的 `"multi_agent_version": "v2"`，详见[模型目录与 V1 兼容](docs/configuration.md#模型目录与-v1-兼容)。安装器不会代改这些设置。
+   使用 `model_catalog_json` 时，主模型和所有可能选用的子模型还须设置 `"multi_agent_version": "v1"`。模型条目显式设为 `v2` 时，仅关闭全局 `multi_agent_v2` 不够，见[模型目录与 V1 兼容](docs/configuration.md#模型目录与-v1-兼容)。安装器不会代改这些设置。
 
-2. 编辑 [`routing.toml`](routing.toml)，把 `orchestrator` 和各 `roles.*` 的 `model`、`effort` 换成自己 provider 可用的值。仓库里的模型名只是示例。
-
-3. 预览并安装：
+2. 预览并安装：
 
    ```sh
    node cli.mjs install          # 预览
    node cli.mjs install --apply  # 应用
    ```
 
-   默认安装到 `CODEX_HOME`，未设置时使用 `~/.codex`。自定义目录和安装保护见[安装路径与文件保护](docs/configuration.md#安装路径与文件保护)。
+   默认目标为 `CODEX_HOME`，未设置时使用 `~/.codex`。
 
-4. 进入要工作的项目目录，启动新会话：
+3. 进入要工作的项目目录，启动新会话：
 
    ```sh
    codex -p task-routing
    ```
 
-   普通 `codex` 不会加载该 profile。安装或更新之后都需要新会话，已有会话不会自动刷新。
+   普通 `codex` 不加载该 profile。安装或更新后都需要新会话。
 
 ### Pi
 
-1. 安装执行与联网检索依赖（本仓库不代装）。使用 [amox_pi_extensions_lean](https://github.com/gfgghgftgffg/amox_pi_extensions_lean) 的独立安装脚本，要求 Pi >=1.1.0、Node >=22.19.0、npm 和 Git。该项目不发布 npm 包；不能把仓库根目录当作单个 Pi 扩展安装。
-
-   先用 `pi list` 核对旧来源，移除被替换的 subagents/web-access 门面，保留 provider 和其他扩展。具体迁移命令见 [Pi 安装](docs/pi.md#安装)。首次克隆到 Task Router 的同级目录后，在 Task Router 目录执行：
+1. 单独安装执行和联网检索扩展。扩展仓库不发布 npm 包，不能把 workspace 根目录当作单个 Pi 扩展安装。首次使用时，在 Task Router 目录执行：
 
    ```sh
    git clone https://github.com/gfgghgftgffg/amox_pi_extensions_lean.git ../amox_pi_extensions_lean
@@ -68,43 +60,33 @@ npm ci
    node ../amox_pi_extensions_lean/scripts/install-extension.mjs pi-web-access-lean
    ```
 
-   已有副本先在扩展仓库安全更新，不必重复 clone。当前审查基线为 `v0.1.2`（subagents 引擎 0.22.0）；复现该版本可先切到对应 tag。安装脚本按包安装，无需扩展仓库根目录 `npm ci`，Router 也不要求 `rpiv-todo-lean`。
+   已有副本先更新，无需重复 clone，也无需在扩展仓库根目录运行 `npm ci`。Router 不要求 `rpiv-todo-lean`。
 
-   插件替换后 `/reload` 或重启 Pi；不要同时加载多个门面或另行启用上游依赖。建议在 `~/.pi/agent/subagents.json` 合并 `"fallbackSubagent": "none"`、`"strictAgentFiles": true`、`"workflowsEnabled": true`，保留原有设置；安装器不代改这些选项。新引擎还会发现已安装包内的 Agent/workflow，须检查实际角色来源、项目 trust 和工具作用域。详见 [Pi 适配](docs/pi.md)。
+   用 `pi list` 核对来源，避免同时加载多个 subagents/web-access 门面。旧来源的移除命令、推荐的 `subagents.json` 设置和角色发现规则见 [Pi 安装](docs/pi.md#安装)。替换扩展后执行 `/reload` 或重启 Pi。
 
-2. 编辑同一个 [`routing.toml`](routing.toml)。Pi 的模型和强度保存在生成的角色映射中，每次派发都显式传入，角色 frontmatter 不锁死模型。provider、thinking 和临时覆盖规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
-
-3. 预览并安装：
+2. 安装 Router 角色和 Skill：
 
    ```sh
    node cli.mjs install --host pi          # 预览
    node cli.mjs install --host pi --apply  # 应用
    ```
 
-   默认安装到 `PI_CODING_AGENT_DIR`，未设置时使用 `~/.pi/agent`。用 `--pi-home` 指定其他目录时，启动 Pi 的 `PI_CODING_AGENT_DIR` 也应指向同一位置。
+   默认目标为 `PI_CODING_AGENT_DIR`，未设置时使用 `~/.pi/agent`。指定 `--pi-home` 后，启动 Pi 的 `PI_CODING_AGENT_DIR` 也须指向该目录。
 
-4. 在工作项目中启动 Pi 或执行 `/reload`，然后显式启用路由：
+3. 在工作项目中启动 Pi 或执行 `/reload`，确认 `/agents` 可见 `tr_*`，再显式启用：
 
    ```text
    /skill:task-routing 你的任务
    ```
 
-   安装本身不激活路由，也不改主模型、`settings.json` 或认证。旧版 `agents/task-routing/*.md` 会按 manifest 哈希迁到 `agents/tr_*.md`，未托管或人工修改的文件会阻止迁移，不会被覆盖。独立构建用 `node cli.mjs build --host pi`，默认输出 `dist/pi/`。
+   安装不自动启用路由，也不切换主模型。每次新派发都要从生成的角色映射中显式传入 model 和 thinking；只按角色名启动会继承父模型。详见 [Pi 角色与模型派发](docs/pi.md#角色与模型派发)。
 
-### 更新 routing.toml 后重新安装
-
-`routing.toml` 是唯一事实来源。改完必须重新安装，宿主才会看到新的角色和档位：
-
-```sh
-node cli.mjs install --apply             # Codex
-node cli.mjs install --host pi --apply   # Pi
-```
-
-重新安装是幂等的：只更新受管文件，删除候选时按记录的哈希清理对应文件，人工改过的文件会被拒绝而不是被覆盖。已有会话不会自动刷新——Codex 需要 `codex -p task-routing` 启动新会话，Pi 需要新会话或 `/reload`。只更新模型目录不会改变路由分配，仍要修改 `routing.toml` 并重新安装。
+> [!NOTE]
+> Pi 集成的审查基线是扩展仓库 `v0.1.2`、subagents 引擎 `0.22.0`，安装脚本不会自动固定到此版本。实际加载的包、工具接口和权限范围仍须核对，见 [Pi 适配](docs/pi.md)。
 
 ## 配置角色
 
-[`routing.toml`](routing.toml) 中的 `orchestrator` 设置主 Agent 的模型和 effort。五个子角色分别承担以下工作：
+`orchestrator` 设置 Codex 主模型及 effort；在 Pi 中，它是推荐的启动选择，Skill 不会切换父模型。五个子角色的职责如下：
 
 | 角色 | 职责 |
 | --- | --- |
@@ -114,7 +96,7 @@ node cli.mjs install --host pi --apply   # Pi
 | `reasoning` | 复杂判断和独立高风险审查 |
 | `general` | 非编码分析、总结、写作和结构化产出 |
 
-每个 `[roles.X]` 的 `model` 和 `effort` 构成默认候选。需要多个档位时，在 `options` 内联数组中添加候选，每行一项：
+每个 `[roles.X]` 的 `model` 和 `effort` 是默认候选，可在 `options` 中追加其他档位：
 
 ```toml
 [roles.coding]
@@ -126,63 +108,73 @@ options = [
 ]
 ```
 
-`id` 可以省略，生成器会根据 `model`、`effort` 和显式 `provider` 生成稳定 ID；重排候选或修改 `when` 不会改变它。显式命名和候选文件规则见[候选配置](docs/configuration.md#候选配置)。
+`when` 是主 Agent 选型时的提示，生成器不按关键词分类任务。同一角色的所有候选共享职责契约。省略 `id` 时，生成器根据 model、effort 和显式 provider 生成稳定 ID；重排候选或修改 `when` 不会改变 ID。
 
-`when` 是给主 Agent 的选择提示。主 Agent 结合任务情况判断选型，生成器不会按硬编码关键词分类任务。同一角色的所有候选共享职责契约。
+主模型、默认候选和 `options` 均可设置 `provider`。子候选省略时继承实际主会话 provider，不继承同角色其他候选的 provider。Codex 的认证和服务地址仍由原有配置提供；Pi 的模型 ID 与 provider 分开填写。
 
-主模型、角色默认候选和可选候选都可设置 `provider = "已配置的-provider-id"`。Codex 的 `orchestrator` 省略 provider 时沿用现有配置，子角色省略时继承主会话 provider，不继承同角色默认候选的显式 provider；认证和服务地址继续使用已有 Codex 配置。Pi 的 provider 写法和继承规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
-
-具体任务如何选档，可读 `routing.toml` 中各候选的 `when` 和对应 Skill：[Codex](skill/SKILL.md)、[Pi](skill/pi/SKILL.md)。并行协作参考也按宿主区分：[Codex](skill/references/parallel-work.md)、[Pi lean](skill/pi/execution.md)。
+完整字段、候选命名和 Codex provider 规则见[配置参考](docs/configuration.md#候选配置)；Pi 的 thinking、继承及覆盖规则见 [Pi 适配](docs/pi.md#角色与模型派发)。
 
 ## 编排方式
 
-主 Agent 按**当前阶段和实际可用能力**选择编排方式，和模型档位分开判断；不按宿主或插件名字决定，也不按 Agent 数量、步骤数量或“需要独立验收”触发 workflow。一个工具门面可能提供多种操作，应检查实际接口，不只看工具数量或插件是否安装。
+模型档位与编排方式分别选择。主 Agent 先检查实际可用的操作，再按当前阶段的依赖、分支、输入输出和停止条件组织工作。
 
-| 可用能力 | 如何编排 |
+| 可用能力 | 做法 |
 | --- | --- |
-| subagents 和 workflow 都有 | 发现会改变方向、少量明确分工时直接调度；稳定批处理、流水线或复用有实际收益时使用 workflow；可按阶段混合 |
-| 只有 subagents | 主线程协调并行任务、依赖顺序、批次和跟进，不尝试调用 workflow |
-| 只有 workflow | 使用较短、有边界的阶段；探索结果先交回主线程判断，再定义下一阶段，不预先猜完整流程 |
-| 两者都没有 | 主线程处理允许自行完成的工作；需要委派或独立验收的部分报告能力缺失，不伪造子任务执行 |
+| subagents 和 workflow 都有 | 需要根据发现调整方向、少量明确分工时直接调度；批处理、流水线或复用有实际收益时使用 workflow，可分阶段混用 |
+| 只有 subagents | 主线程协调并行、依赖、批次和跟进 |
+| 只有 workflow | 使用短而有边界的阶段，先返回证据，再决定下一阶段 |
+| 两者都没有 | 主线程处理允许自行完成的部分，报告缺失的委派或独立验收能力 |
 
-一个 coder 实现、一个 verifier 验收，不自动要求 workflow；只有 workflow 可用时也可用它承载这两个独立工作单元。workflow 的对象列表、循环和分支可以运行时确定，关键是当前阶段的输入输出、依赖和停止条件是否清楚。阶段结束或确认安全停止后可重新选择，但不能把模式切换当作模型、权限或运行故障的绕过手段。用户明确要求不可用的执行方式时，应报告限制，不能静默替换。
+多个 Agent、多步骤或独立验收都不自动要求 workflow。用户指定的方式不可用时，要报告限制；模型、权限或运行故障不能用静默切换方式绕过。
 
-Agent 间的证据和跟进由主线程中转，不承诺子 Agent 自由互聊或自动同步上下文。所有模式都保留独立验收、文件所有权、合计并发上限和同一工作单元的修复次数；运行方式变化不会放宽这些约束。
+Agent 间的证据由主线程中转，不自动同步上下文。各模式都要保留独立验收、文件所有权、合计并发上限和同一工作单元的修复次数。并行写入需隔离工作目录，不能让多个 writer 同时修改共享目录。
 
-规则、反例和 Anthropic / OpenAI 官方依据见[阶段级编排](skill/references/orchestration.md)。这是 Skill 政策，不是新增分类器、调度服务或框架依赖。决策规则可复用，执行仍须遵循具体工具的 schema，并保留角色、精确模型和权限；有同名能力不代表任意插件 API 都自动兼容。本文中的两宿主安装后端与执行参考仍描述当前支持的集成。
+决策规则和例子见[阶段级编排](skill/references/orchestration.md)；执行细节分别见 [Codex 并行工作规则](skill/references/parallel-work.md)和 [Pi execution](skill/pi/execution.md)。这些是 Skill 政策，实际调用仍须遵循宿主工具的接口。
 
 ## 日常使用与更新
 
-在路由会话中直接描述任务即可，主 Agent 按需要分工。
+路由启用后，直接描述任务即可。临时指定某个模型或强度，只影响指定任务或角色，不改写 `routing.toml`；有匹配候选时优先使用，否则检查宿主是否支持按次覆盖，不能静默换模型。
 
-临时要求某个模型或强度，例如“这次用 Sol 高强度验证”，只影响指定的任务或角色，不改写 `routing.toml`。存在匹配候选时优先使用该命名角色；其他覆盖取决于宿主能力，详见[配置优先与临时覆盖](docs/configuration.md#配置优先与临时覆盖)。
+### 更新 routing.toml 后重新安装
 
-需要持久调整时，修改本仓库 `routing.toml`，按上面的「更新 routing.toml 后重新安装」重装对应宿主，再启动新会话或 `/reload`。
+持久调整应修改源配置，再重装对应宿主：
 
-`install --apply` 已包含模型目录检查，并同步 profile、角色和 Skill，无需每次单独构建。
+```sh
+node cli.mjs install --apply             # Codex
+node cli.mjs install --host pi --apply   # Pi
+```
 
-自定义源配置与安装目录的更新方式见 [CLI 参数](docs/configuration.md#cli-参数)；基础指令变更见[基础指令快照](docs/configuration.md#基础指令快照)，生成文件的修改限制见[安装路径与文件保护](docs/configuration.md#安装路径与文件保护)。
+Codex 随后用 `codex -p task-routing` 启动新会话；Pi 执行 `/reload` 或启动新会话。只更新模型目录不会改变路由分配。
 
-Codex 方面，普通 `codex` 启动不会加载该 profile，也可在会话中显式调用 `$task-routing` 使用 Skill 政策；它的生效边界，以及停用和手动移除方式，见[配置参考](docs/configuration.md#停用与手动移除)。Pi 方面，安装后由 `/skill:task-routing` 显式启用，未启用时保持原有工作方式。
+`install --apply` 已包含目录检查和产物生成，无需先单独 build。重复安装在内容不变时为空计划；删除候选会按 manifest 哈希清理旧文件，手动改过的文件会阻止更新。
+
+使用自定义 `--config` 或安装目标时，更新应继续指定同一配置和目录。重命名本仓库文件夹不会改变安装目标或 profile 名称；已有脚本若引用旧仓库绝对路径，需同步修改。
+
+停用、手动移除和基础指令快照见[配置参考](docs/configuration.md)；Pi 的受管文件、旧布局迁移和更新边界见 [Pi 文档](docs/pi.md#托管文件与更新)。
 
 ## 命令参考与开发入口
 
-以下命令在仓库目录执行，默认 `--host codex`；Pi 后端加 `--host pi`（配合 `--pi-home`）：
+以下命令默认 `--host codex`，Pi 后端加 `--host pi`：
 
 | 命令 | 用途 |
 | --- | --- |
 | `node cli.mjs install` | 预览安装或更新 |
 | `node cli.mjs install --apply` | 应用安装或更新 |
-| `node cli.mjs doctor` | 单独检查配置与模型目录 |
-| `node cli.mjs build` | 生成独立 bundle，Codex 默认输出 `dist/`，Pi 默认输出 `dist/pi/` |
+| `node cli.mjs doctor` | 检查配置与模型目录 |
+| `node cli.mjs build` | 生成独立 bundle；Codex 默认 `dist/`，Pi 默认 `dist/pi/` |
 
-`doctor` 静态校验主模型和所有候选的模型 ID、effort 与 provider，具体边界见[检查范围](docs/configuration.md#检查范围)，参数选项见 [CLI 参数](docs/configuration.md#cli-参数)。Pi 后端的检查范围见 [Pi 检查](docs/pi.md#检查)。
-
-开发检查与构建：
+`doctor` 不调用模型。静态检查通过不代表服务可达、扩展已加载或子 Agent 派发成功。参数见 [CLI 参数](docs/configuration.md#cli-参数)，检查边界见 [Codex](docs/configuration.md#检查范围)和 [Pi](docs/pi.md#检查)。
 
 ```sh
 npm test
 npm run build
 ```
 
-职责契约在 [`roles/`](roles/)，Codex 编排入口及参考材料在 [`skill/`](skill/)，共享配置生成与安装逻辑在 [`src/router.mjs`](src/router.mjs)，Pi 后端在 [`src/pi.mjs`](src/pi.mjs)，Pi 编排入口在 [`skill/pi/`](skill/pi/)。
+| 目录或文件 | 内容 |
+| --- | --- |
+| [`roles/`](roles/) | 两种宿主共用的职责契约 |
+| [`skill/`](skill/) | Codex Skill 与编排参考 |
+| [`skill/pi/`](skill/pi/) | Pi Skill 与执行参考 |
+| [`src/router.mjs`](src/router.mjs) | 共享配置、Codex 生成和文件安装逻辑 |
+| [`src/pi.mjs`](src/pi.mjs) | Pi 生成与静态检查 |
+| [`test/`](test/) | 离线回归测试 |
