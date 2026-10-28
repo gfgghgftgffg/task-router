@@ -1,7 +1,7 @@
 - Prioritize final result quality over speed.
 
-- Python execution and dependency installation utilize the Conda `codex` environment; Conda path: `D:/miniconda3/condabin/conda.bat`, interpreter path: `C:/Users/莫林/.conda/envs/codex/python.exe`. `pypdf` is installed for PDF processing.
-- Proxy at 127.0.0.1:7897. Using it if encounter network issues or slow speed.
+- Use the local Conda `codex` environment for Python execution and dependency installation. Resolve the actual Conda executable and environment interpreter on the current machine before use; do not assume installation paths. Use `pypdf` for PDF processing.
+- Use a locally configured proxy if networking needs it; do not assume a proxy address.
 
 # Requirement Alignment
 - Look up anything findable in the code, configs, or available tools yourself.
