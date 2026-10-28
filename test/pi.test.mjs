@@ -66,13 +66,14 @@ test('Pi renders flat lean candidates with unchanged contracts and no model pins
     assert.equal(parsed.name, choice.nativeRole);
     assert.equal(parsed.model, undefined, 'pins would defeat direct-call user overrides and provider inheritance');
     assert.equal(parsed.thinking, undefined);
-    assert.equal(parsed.body, fs.readFileSync(path.join(ROOT, 'roles', `${choice.role}.md`), 'utf8'));
+    assert.ok(parsed.body.endsWith(fs.readFileSync(path.join(ROOT, 'roles', `${choice.role}.md`), 'utf8')));
+    assert.match(parsed.body, /^Before starting work, read and follow `/);
     assert.equal(parsed.tools, PI_ROLE_TOOLS[choice.role].join(', '));
     assert.equal(parsed.disallowed_tools, PI_DENIED_TOOLS.join(', '));
     assert.equal(parsed.prompt_mode, 'replace');
     assert.equal(parsed.inherit_context, false);
     assert.equal(parsed.run_in_background, true);
-    assert.equal(parsed.skills, false);
+    assert.equal(parsed.skills, true);
     assert.equal(parsed.extensions, true, 'preserve permission/provider extension hooks');
     assert.equal(parsed.allowed_subagents, 'none');
     for (const key of ['systemPromptMode', 'defaultContext', 'async', 'inheritSkills', 'inheritProjectContext', 'inheritGlobalContext', 'acceptanceRole']) assert.equal(parsed[key], undefined);
@@ -110,6 +111,7 @@ test('Pi closes extension tool exposure while keeping role mutation boundaries',
   for (const tool of ['edit', 'write']) assert.equal(PI_ROLE_TOOLS.verify.includes(tool), false);
   for (const tools of Object.values(PI_ROLE_TOOLS)) {
     assert.ok(tools.includes('ext:pi-subagents-lean/subagent'), 'every role must opt into CLOSED extension-tool scope');
+    assert.ok(tools.includes('ext:builtin:codemode/codemode'));
     assert.equal(tools.includes('contact_supervisor'), false);
   }
   assert.ok(PI_DENIED_TOOLS.includes('subagent'));
@@ -158,7 +160,7 @@ test('Pi preview/install preserve settings, runtime settings, other roles and Co
   assert.equal(fs.readFileSync(path.join(home, 'agents/worker.md'), 'utf8'), 'Do not replace the worker.\n');
   assert.equal(fs.readFileSync(path.join(home, '.task-router/manifest.json'), 'utf8'), '{"version":1,"files":{}}\n');
   const actual = fs.readFileSync(path.join(home, 'AGENTS.md'), 'utf8');
-  assert.ok(actual.startsWith(instructions)); assert.ok(actual.includes(PI_MARKERS.start));
+  assert.equal(actual, instructions);
   assert.equal(planPiInstall(files, home).length, 0);
 });
 
@@ -185,11 +187,12 @@ test('Pi runtime tuning changes invalidate an empty install plan including proje
   assert.throws(() => applyInstall(next, home), /Pi subagents settings changed after planning/);
 });
 
-test('Pi refuses unowned roles, broken markers and redirected managed paths', t => {
+test('Pi refuses unowned roles and redirected managed paths without touching global instructions', t => {
   const home = fixture(t), files = renderPi(config()); put(home, 'agents/tr_coding.md', 'Custom agent.\n');
   assert.throws(() => planPiInstall(files, home), /unowned or edited/);
   const markers = fixture(t); put(markers, 'AGENTS.md', PI_MARKERS.start);
-  assert.throws(() => planPiInstall(files, markers), /ambiguous/);
+  applyInstall(planPiInstall(files, markers), markers);
+  assert.equal(fs.readFileSync(path.join(markers, 'AGENTS.md'), 'utf8'), PI_MARKERS.start);
   const linked = fixture(t), other = fixture(t);
   fs.symlinkSync(other, path.join(linked, 'agents'), process.platform === 'win32' ? 'junction' : 'dir');
   assert.throws(() => planPiInstall(files, linked), /symlink\/junction/); assert.deepEqual(fs.readdirSync(other), []);

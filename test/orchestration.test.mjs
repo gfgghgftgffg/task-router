@@ -31,7 +31,8 @@ test('both hosts ship the same phase-level policy without another runtime depend
     assert.equal(files.get(policyPath), source, host);
     assert.match(files.get('skills/task-routing/SKILL.md'), /\(references\/orchestration\.md\)/);
     assert.match(files.get('skills/task-routing/references/role-map.md'), /\(orchestration\.md\)/);
-    assert.match(files.get('AGENTS.md'), /not agent count or number of steps/);
+    if (host === 'codex') assert.match(files.get('AGENTS.md'), /not agent count or number of steps/);
+    else assert.equal(files.has('AGENTS.md'), false);
   }
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   assert.deepEqual(pkg.dependencies, { 'smol-toml': '1.9.0' });
@@ -122,7 +123,7 @@ test('the capability gate covers both modes, either mode alone and neither in bo
     assert.match(policy, /capability from a host or plugin name/);
     for (const row of ['Direct subagents and workflows', 'Direct subagents only', 'Workflows only', 'Neither']) assert.ok(policy.includes(`| ${row} |`));
     assert.match(files.get('skills/task-routing/references/role-map.md'), /Check actual delegation capabilities, not host\/plugin names/);
-    assert.match(files.get('AGENTS.md'), /If only one is available, use it for bounded phases; do not invent the other/);
+    if (files.has('AGENTS.md')) assert.match(files.get('AGENTS.md'), /If only one is available, use it for bounded phases; do not invent the other/);
     const start = skill.indexOf("## Choose the current phase's shape");
     const end = skill.indexOf('\n## ', start + 1);
     assert.ok(start >= 0 && end > start, 'entry skill must contain the phase selection section');

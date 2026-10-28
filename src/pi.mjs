@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ROOT, ROLE_META, getRoleChoices, mergeAgents, planInstall, safeTarget } from './router.mjs';
+import { ROOT, ROLE_META, SHARED_AGENTS_PATH, roleInstructions, getRoleChoices, planInstall, safeTarget } from './router.mjs';
 
 export const PI_THINKING = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
 export const PI_MARKERS = { start: '<!-- pi-task-router:start -->', end: '<!-- pi-task-router:end -->' };
@@ -28,13 +28,14 @@ const tableText = value => String(value).replace(/\|/g, '\\|');
 // packages. The upstream parser splits at the first '/', so scoped names here
 // would break narrowing. Verify actual package ownership at runtime.
 const executorSelector = 'ext:pi-subagents-lean/subagent';
+const codemodeSelector = 'ext:builtin:codemode/codemode';
 export const PI_DENIED_TOOLS = ['subagent', 'Agent', 'SubagentWorkflow', 'workflow', 'workflow_control', 'get_subagent_result', 'steer_subagent'];
 export const PI_ROLE_TOOLS = {
-  coding: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write', executorSelector],
-  search: ['read', 'grep', 'find', 'ls', executorSelector, 'ext:pi-web-access-lean/web_access'],
-  verify: ['read', 'grep', 'find', 'ls', 'bash', executorSelector],
-  reasoning: ['read', 'grep', 'find', 'ls', executorSelector],
-  general: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write', executorSelector],
+  coding: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write', executorSelector, codemodeSelector],
+  search: ['read', 'grep', 'find', 'ls', executorSelector, codemodeSelector, 'ext:pi-web-access-lean/web_access'],
+  verify: ['read', 'grep', 'find', 'ls', 'bash', executorSelector, codemodeSelector],
+  reasoning: ['read', 'grep', 'find', 'ls', executorSelector, codemodeSelector],
+  general: ['read', 'grep', 'find', 'ls', 'bash', 'edit', 'write', executorSelector, codemodeSelector],
 };
 
 export const defaultPiHome = () => process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
@@ -81,7 +82,7 @@ export function renderPi(c) {
   validatePiConfig(c);
   const files = new Map(), choices = getRoleChoices(c), rows = [];
   for (const [role, meta] of Object.entries(ROLE_META)) {
-    const contract = read(path.join(ROOT, 'roles', `${role}.md`));
+    const contract = roleInstructions(role);
     for (const choice of choices.filter(item => item.role === role)) {
       // Deliberately omit model/thinking: direct Agent calls cannot override
       // frontmatter pins. The role map supplies both on EVERY fresh dispatch,
@@ -93,7 +94,7 @@ export function renderPi(c) {
         `tools: ${PI_ROLE_TOOLS[role].join(', ')}`,
         `disallowed_tools: ${PI_DENIED_TOOLS.join(', ')}`,
         'extensions: true',
-        'skills: false',
+        'skills: true',
         'allowed_subagents: none',
         'prompt_mode: replace',
         'inherit_context: false',
@@ -104,7 +105,7 @@ export function renderPi(c) {
     }
     files.set(`skills/task-routing/references/roles/${role}.md`, contract);
   }
-  files.set('skills/task-routing/SKILL.md', read(path.join(ROOT, 'skill', 'pi', 'SKILL.md')));
+  files.set('skills/task-routing/SKILL.md', read(path.join(ROOT, 'skill', 'pi', 'SKILL.md')).replaceAll('{{SHARED_AGENTS_PATH}}', SHARED_AGENTS_PATH));
   files.set('skills/task-routing/references/pi-execution.md', read(path.join(ROOT, 'skill', 'pi', 'execution.md')));
   for (const filename of ['coding-quality.md', 'research-evidence.md', 'orchestration.md']) {
     files.set(`skills/task-routing/references/${filename}`, read(path.join(ROOT, 'skill', 'references', filename)));
@@ -126,17 +127,9 @@ export function renderPi(c) {
     'Continue related work only after checking its stored route, current definition, cwd and baseline. A changed route needs a new fresh child. Coder/verifier contexts are independent.',
     'Search exposes the lean web_access facade (search/check/fetch/get), not four raw web tools. Search/reasoning have no bash/edit/write. Verify has bash but no edit/write; no-source-edit is policy, not an OS sandbox.',
     'Check the effective definition and origin in /agents: installed package agents rank below global/workspace/project files, but above builtins. Inspect packageAgents/packageWorkflows and project trust; reload after discovery changes. Refuse unexpected model/thinking, isolated/isolation, exclude_extensions, delegation or tool overrides.',
-    'With extensions: true the engine also loads builtin codemode/tool_search/MCP. The closed ext: scope must exclude their unlisted tools, including deferred and nested ctx.executeTool calls; keep provider/permission hooks and do not assume MCP processes are disabled.',
+    'All roles explicitly allow builtin codemode for batching their permitted tools. Its nested ctx.executeTool calls remain subject to the same closed ext: scope; tool_search, MCP tools and delegation stay unlisted or denied. Keep provider/permission hooks and do not assume MCP processes are disabled.',
     'Background completions may cover only part of a batch under smart/async join. Track outstanding children and writers before dependent stages or handoff; do not poll or interpret a notification as all siblings finishing.',
-    'Check global and project .pi/agents / .agents/agents definitions before dispatch: frontmatter pins can outrank a direct-call override. Replaced prompts do not inherit AGENTS.md; include applicable constraints in each cold-start brief.', '',
-  ].join('\n'));
-  files.set('AGENTS.md', [
-    PI_MARKERS.start,
-    'Task Router for Pi is opt-in. When the user invokes /skill:task-routing or applicable instructions explicitly enable it, the coordinating parent follows that skill and its generated tr_* role map. Otherwise keep the existing workflow.',
-    'Installation alone does not authorize delegation. An assigned child follows its role contract and does not activate parent routing or launch further agents.',
-    `Use ${PI_RUNTIME} from amox_pi_extensions_lean for execution, not builtin role substitutions or a separate runner. Supply exact model and thinking from the role map on every fresh launch; explicit task-scoped choices take precedence. Preserve host permissions and report unsupported routes.`,
-    'Choose among available direct-subagent and workflow operations by decision structure and useful batching, not agent count or number of steps. If only one is available, use it for bounded phases; do not invent the other. Reassess at safe phase boundaries; independent coding acceptance remains required.',
-    PI_MARKERS.end, '',
+    `Check global and project .pi/agents / .agents/agents definitions before dispatch: frontmatter pins can outrank a direct-call override. Replaced prompts do not inherit AGENTS.md; every role reads the shared rules at \`${SHARED_AGENTS_PATH}\`. Include applicable project constraints in each cold-start brief.`, '',
   ].join('\n'));
   return files;
 }
@@ -146,7 +139,7 @@ export function planPiInstall(files, home, options = {}) {
   const runtime = readPiRuntimeSettings(home, options.cwd);
   const changes = planInstall(files, home, {
     base, manifestPath: PI_MANIFEST, stalePattern: PI_STALE_PATH,
-    mergeAgents: (existing, block) => mergeAgents(existing, block, PI_MARKERS),
+    preserveGlobalInstructions: true,
   });
   changes.guards.push(...runtime.guards);
   return changes;

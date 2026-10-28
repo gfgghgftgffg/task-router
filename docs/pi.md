@@ -121,7 +121,7 @@ lean 使用 `op/prompt/subagent_type/run_in_background/input`，不是旧 `agent
 
 上游允许模糊匹配、跨 provider 回退和 thinking clamping，Router 政策禁止依赖它们。必须事前核对精确可用 ID 和档位，并在验收前检查实际子会话的 model/thinking；请求参数和子模型自述都不是执行证据。发生变化时报告基础设施故障，不把替代模型当作成功。
 
-项目 `.agents/agents` 和 `.pi/agents` 可覆盖全局定义，后者优先。检查有效角色文件，包括是否有人添加锁定字段、嵌套 delegation 或更宽工具。默认 replace prompt 不继承 AGENTS.md/CLAUDE.md；主 Agent 应读取并在冷启动 brief 中供应适用约束，不能声称自动继承。
+项目 `.agents/agents` 和 `.pi/agents` 可覆盖全局定义，后者优先。检查有效角色文件，包括是否有人添加锁定字段、嵌套 delegation 或更宽工具。默认 replace prompt 不继承 AGENTS.md/CLAUDE.md；入口 Skill 和所有生成角色会明确读取本仓库的共享 `AGENTS.md`，路径在生成时写为绝对路径。修改共享规则无需重新安装，移动仓库则需重新安装。主 Agent 仍须在冷启动 brief 中供应当前项目的额外约束，不能声称自动继承父线程完整规则或历史。
 
 ## 并行、续聊与执行边界
 
@@ -188,9 +188,9 @@ return { outcomes, executionIncomplete: outcomes.some(item => item.finding === n
 | reasoning | read/grep/find/ls；无 bash/edit/write |
 | general | read/grep/find/ls、bash、edit/write；职责限非编码 |
 
-所有角色保持 `extensions: true`，保留 provider/权限扩展的生命周期 hooks；`skills: false`、`allowed_subagents: none`。仅指定内置 tools 不会关闭上游默认的扩展工具继承，因此每个角色都使用 ext 选择器建立明确白名单。
+所有角色保持 `extensions: true`，保留 provider/权限扩展的生命周期 hooks；`skills: true`、`allowed_subagents: none`。Skills 按需发现和读取，不预载全部正文，也不扩大角色工具或职责权限；`disable-model-invocation: true` 的 Skill 不自动选用。所有角色显式选入 `ext:builtin:codemode/codemode`，可批量调用、过滤原有权限内的工具。codemode 不授予额外的 bash、写入、MCP 或委派权限，内部工具调用仍经过相同的白名单检查。
 
-`ext:pi-subagents-lean/subagent` 配合 `disallowed_tools: subagent, ...` 是有意的“选入后拒绝”：以必装执行插件打开 closed 扩展工具范围，同时禁止该门面及其他编排工具。search 另外仅选 `ext:pi-web-access-lean/web_access`。scope 短名不变不代表旧 `@ssk_dev` 来源仍受支持，必须核对实际包身份。
+`ext:pi-subagents-lean/subagent` 配合 `disallowed_tools: subagent, ...` 是有意的“选入后拒绝”：以必装执行插件打开 closed 扩展工具范围，同时禁止该门面及其他编排工具。除所有角色的 codemode 外，search 另外选入 `ext:pi-web-access-lean/web_access`。scope 短名不变不代表旧 `@ssk_dev` 来源仍受支持，必须核对实际包身份。
 
 新引擎在 `extensions: true` 的子会话加载 builtin codemode、tool_search 和 MCP，每个子会话可以启动自己的 MCP 服务。closed scope 应排除未选入的工具，并在迟注册、exposure/defaultActive、tool_search 激活和嵌套 `ctx.executeTool` 调用时继续生效；只检查声明/active 列表还不够。白名单不阻止 factory/hooks/MCP 进程执行，不能声称所有 MCP 被关闭。用户可明确选择 `exclude_extensions: builtin:mcp` 等限制，但 Router 不自动改这些设置，也不关闭所有扩展来绕过作用域故障。
 
@@ -254,13 +254,14 @@ node scripts/check-pi-runtime.mjs "<Pi SDK 包目录>" "<amox subagents 包目�
 | --- | --- |
 | `agents/tr_*.md` | 扁平 Router 角色和候选 |
 | `skills/task-routing/` | Pi 入口、模型映射与参考契约 |
-| `AGENTS.md` | 仅合并 pi-task-router:start/end 区块 |
 | `.task-router/pi/manifest.json` | 后端独立安装记录 |
 | `.task-router/backups/` | 安装器变更前的受管文件备份 |
 
 旧 nicobailon 布局中的 `agents/task-routing/<已知角色>[_候选].md` 按 manifest/hash 迁到扁平目录，包含旧默认角色。只有受管、内容未变的已知旧路径会删除；手改旧文件、新路径碰撞、未知受管路径会拒绝迁移。候选删除同样只清理已知命名空间和未变哈希。
 
-保留其他角色、Skills、设置和凭据；Pi/Codex manifest 和 AGENTS 标记独立。设置、runtime tuning 与所有受管目标都有预镜像校验，规划后变化（即使原计划为空）拒绝应用；应用失败回滚已执行的文件变更。
+Pi 安装器不再管理宿主全局 `AGENTS.md`，也不添加 Router 区块。已有 manifest 中该文件的记录会被解除管理，文件内容保持原样；需要移除旧区块时由用户编辑。共享规则来自仓库根目录 `AGENTS.md`，不是宿主全局文件的持续镜像。
+
+保留其他角色、Skills、设置和凭据；Pi/Codex manifest 独立。设置、runtime tuning 与所有受管目标都有预镜像校验，规划后变化（即使原计划为空）拒绝应用；应用失败回滚已执行的文件变更。
 
 更新 routing.toml 后：
 
@@ -272,4 +273,4 @@ node cli.mjs install --host pi --apply
 
 独立构建为 `node cli.mjs build --host pi [--out PATH]`，默认 dist/pi；Codex 默认仍是 dist。不要把两套 bundle 安装到同一 home 或互相覆盖同名 Skill。
 
-没有自动卸载 Router 命令。停用先不再调用 Skill；手动移除时根据 Pi manifest 核对，只删除受管文件和 Pi AGENTS 区块，保留其他指令与配置。
+没有自动卸载 Router 命令。停用先不再调用 Skill；手动移除时根据 Pi manifest 核对，只删除受管角色和 Skill，保留全局指令、共享规则和其他配置。

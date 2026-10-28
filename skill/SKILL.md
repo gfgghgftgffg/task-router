@@ -11,6 +11,10 @@ Read [the generated role map](references/role-map.md) once when delegating. It l
 
 Task shape sets the search tier; access mode does not. Read-only is a permission boundary, not a difficulty signal. Exact locating such as `rg`/`grep` over known strings or symbols stays light even across many files; bounded understanding such as limited repository navigation, a call chain for a well-defined question, or one documentation topic needs more judgment; open-ended research with multiple sources, conflicts, or coverage requirements needs a candidate suited to deep research, selected from the role map. Network access alone does not raise the tier, and local code can be complex too. For verification, rank candidates by semantic risk and the evidence the change needs, not diff size. The parent reads a known short path directly instead of spawning a child for every grep. When the hard part is requirement or evidence judgment, the parent states the scope first and switches to another authorized candidate only if that remains necessary; a network or tool error is not by itself an upgrade signal.
 
+## Shared instructions
+
+Before starting work, read and follow `{{SHARED_AGENTS_PATH}}`. The parent and all Router roles use this live rule file; project constraints, role boundaries and host permissions still apply.
+
 ## Choose the work unit
 
 - Keep goal interpretation, overall direction, and consequential decisions in the parent.

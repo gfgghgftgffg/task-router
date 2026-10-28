@@ -281,7 +281,7 @@ test('activation lives only in the generated profile and follows custom profile 
   assert.equal(parse(fs.readFileSync(path.join(dir, 'team-routing.config.toml'), 'utf8')).developer_instructions, activation);
 });
 
-test('child role contracts stay byte-identical to the source and never carry the parent activation', () => {
+test('child role contracts keep their source after the shared-rule pointer and never carry parent activation', () => {
   const c = legacyConfig();
   const plain = render(c), composed = render(c, { baseInstructions: 'Base developer text.' });
   const activation = activationInstructions(c.profile);
@@ -289,7 +289,8 @@ test('child role contracts stay byte-identical to the source and never carry the
     const relative = `agents/task-routing/${role}.toml`;
     assert.equal(plain.get(relative), composed.get(relative));
     const contract = parse(plain.get(relative)).developer_instructions;
-    assert.equal(contract, fs.readFileSync(path.join(ROOT, 'roles', `${role}.md`), 'utf8'));
+    assert.ok(contract.endsWith(fs.readFileSync(path.join(ROOT, 'roles', `${role}.md`), 'utf8')));
+    assert.match(contract, /^Before starting work, read and follow `/);
     assert.equal(plain.get(`skills/task-routing/references/roles/${role}.md`), contract);
     assert.equal(contract.includes(activation), false);
     assert.equal(contract.includes('Base developer text.'), false);

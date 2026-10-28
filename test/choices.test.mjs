@@ -122,7 +122,8 @@ test('all candidates render native roles that keep their role contract and sandb
     assert.equal(native.model, choice.model);
     assert.equal(native.model_reasoning_effort, choice.effort);
     assert.equal(native.sandbox_mode, ROLE_META[choice.role].sandbox);
-    assert.equal(native.developer_instructions, fs.readFileSync(path.join(ROOT, 'roles', `${choice.role}.md`), 'utf8'));
+    assert.ok(native.developer_instructions.endsWith(fs.readFileSync(path.join(ROOT, 'roles', `${choice.role}.md`), 'utf8')));
+    assert.match(native.developer_instructions, /^Before starting work, read and follow `/);
     assert.equal(native.when, undefined, 'when is a routing hint, not a native setting');
     assert.ok(native.description.trim());
   }

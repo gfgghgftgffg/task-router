@@ -27,8 +27,8 @@ test('Pi runtime identity and reviewed baseline point to the amox repository', (
   assert.ok(Object.isFrozen(PI_RUNTIME_BASELINE));
   const files = renderPi(config()), map = files.get('skills/task-routing/references/role-map.md');
   for (const text of [PI_RUNTIME, PI_RUNTIME_REPOSITORY, 'v0.1.2', '0.22.0', 'Pi >=1.1.0']) assert.ok(map.includes(text));
-  assert.ok(files.get('AGENTS.md').includes(`Use ${PI_RUNTIME} from amox_pi_extensions_lean`));
-  for (const relative of ['AGENTS.md', 'skills/task-routing/SKILL.md', 'skills/task-routing/references/pi-execution.md', 'skills/task-routing/references/role-map.md']) assert.doesNotMatch(files.get(relative), /@ssk_dev\/|upstream 0\.19\.0/);
+  assert.equal(files.has('AGENTS.md'), false, 'Pi must not manage global instructions');
+  for (const relative of ['skills/task-routing/SKILL.md', 'skills/task-routing/references/pi-execution.md', 'skills/task-routing/references/role-map.md']) assert.doesNotMatch(files.get(relative), /@ssk_dev\/|upstream 0\.19\.0/);
 });
 
 test('installation docs use independent repository scripts, not unpublished npm or workspace-root installs', () => {
@@ -51,6 +51,7 @@ test('installation docs use independent repository scripts, not unpublished npm 
 test('scoped amox packages keep unscoped ext selectors and the original role hooks/tools', () => {
   for (const tools of Object.values(PI_ROLE_TOOLS)) {
     assert.ok(tools.includes('ext:pi-subagents-lean/subagent'));
+    assert.ok(tools.includes('ext:builtin:codemode/codemode'));
     assert.ok(tools.every(tool => !tool.startsWith('ext:@')));
     for (const forbidden of ['codemode', 'tool_search', 'mcp__write']) assert.equal(tools.includes(forbidden), false);
   }
@@ -58,7 +59,7 @@ test('scoped amox packages keep unscoped ext selectors and the original role hoo
   for (const [relative, text] of renderPi(config())) {
     if (!relative.startsWith('agents/')) continue;
     assert.match(text, /^extensions: true$/m);
-    assert.match(text, /^skills: false$/m);
+    assert.match(text, /^skills: true$/m);
     assert.match(text, /^allowed_subagents: none$/m);
     assert.doesNotMatch(text, /^(?:model|thinking|isolated|isolation|exclude_extensions):/m);
   }
@@ -131,7 +132,7 @@ test('managed legacy-brand policy upgrades idempotently without changing roles, 
   const old = new Map([...files].map(([name, text]) => [name, text.replaceAll('@gfgghgftgffg/', '@ssk_dev/')]));
   applyInstall(planPiInstall(old, home, { cwd }), home);
   const changes = planPiInstall(files, home, { cwd });
-  assert.ok(changes.some(change => change.relative === 'AGENTS.md'));
+  assert.equal(changes.some(change => change.relative === 'AGENTS.md'), false);
   assert.equal(changes.some(change => change.relative.startsWith('agents/') || change.relative === 'settings.json' || change.relative === 'subagents.json'), false);
   applyInstall(changes, home);
   assert.equal(planPiInstall(files, home, { cwd }).length, 0);

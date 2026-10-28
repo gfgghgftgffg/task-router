@@ -10,6 +10,10 @@ This is the parent policy for Task Router's own `tr_*` agents. The executor is `
 
 Installation is not activation or delegation authority. Apply this policy only when the operator invokes `/skill:task-routing` or applicable instructions explicitly enable it. User instructions, project constraints and host permissions take precedence. Otherwise keep the existing workflow.
 
+## Shared instructions
+
+Before starting work, read and follow `{{SHARED_AGENTS_PATH}}`. This is the live, shared rule file for the parent and all Router roles, not a generated snapshot. Project constraints and role-specific tool/authority limits still apply.
+
 ## Select a route
 
 Read [the generated role map](references/role-map.md). Select its named candidate by task complexity, risk, context volume and economy, not always the strongest model. Give a short reason for a non-obvious choice.
@@ -63,7 +67,7 @@ subagent({
 
 Use real registered models and configured thinking, not example placeholders. `input` must be a JSON object string; direct fields override duplicate keys in it. Do not use old `agent/task/context/async/action` fields.
 
-Briefs include objective, repo/cwd/branch/ref, edit ownership, applicable project/global instructions, confirmed sources/interfaces, acceptance criteria, validation, expected report and stop conditions. `prompt_mode: replace` does NOT inherit AGENTS.md/CLAUDE.md. The parent reads and supplies relevant constraints; do not claim automatic inheritance or widen tools to compensate. Generated contexts are fresh with skills and nested delegation disabled.
+Briefs include objective, repo/cwd/branch/ref, edit ownership, applicable project constraints, confirmed sources/interfaces, acceptance criteria, validation, expected report and stop conditions. `prompt_mode: replace` does NOT inherit AGENTS.md/CLAUDE.md. Every generated role explicitly reads the shared rule file above; the parent supplies any additional project-specific constraints. Do not claim automatic inheritance or widen tools to compensate. Generated contexts are fresh with Skill discovery enabled and nested delegation disabled. Skills are read on demand and cannot widen role permissions; explicit-only Skills are not automatically selected.
 
 Read [Pi execution](references/pi-execution.md) for either mode. In direct coordination, issue multiple `op: "run"` calls for independent work, use completion results to decide successors, and use supported steer/resume for focused follow-ups. This does not need an enclosing workflow. Smart/async join can notify a completed subset before siblings finish; track outstanding children and writers instead of treating one notification as the entire batch completing.
 
@@ -71,7 +75,7 @@ When a scripted phase is selected, use one native lean `op: "workflow"` with `ag
 
 Continue related work with its suitable known owner only after checking stored route, current definition, tools, cwd and baseline. Independent work and changed routes start fresh. Coder/verifier contexts are always independent.
 
-Search exposes `web_access` from `@gfgghgftgffg/pi-web-access-lean`, supporting search/check/fetch/get; no shell/edit/write. Reasoning also has no mutation tools. Verify has bash for checks but no edit/write: no-source-edit is policy, not an OS sandbox. With extensions enabled, children also load builtin codemode/tool_search/MCP; verify the closed ext: scope gates unlisted tools, including deferred and nested ctx.executeTool calls. MCP processes can still start. Preserve permission/provider hooks; do not switch to foreground, set isolated or disable extensions/trust checks to bypass a setup failure.
+Search exposes `web_access` from `@gfgghgftgffg/pi-web-access-lean`, supporting search/check/fetch/get; no shell/edit/write. Reasoning also has no mutation tools. Verify has bash for checks but no edit/write: no-source-edit is policy, not an OS sandbox. All roles allow builtin codemode to batch and filter calls to their permitted tools; it does not grant extra tools or nested delegation. With extensions enabled, children also load builtin tool_search/MCP; verify the closed ext: scope gates unlisted tools, including deferred and nested ctx.executeTool calls. MCP processes can still start. Preserve permission/provider hooks; do not switch to foreground, set isolated or disable extensions/trust checks to bypass a setup failure.
 
 Lean has no `contact_supervisor` channel. A blocked child reports the question and stops; the parent resolves it and resumes when eligible, rather than pretending a blocking supervisor request is pending.
 

@@ -6,6 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'smol-toml';
 
 export const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+export const SHARED_AGENTS_PATH = path.join(ROOT, 'AGENTS.md').replaceAll('\\', '/');
+export const sharedInstructions = () => `Before starting work, read and follow \`${SHARED_AGENTS_PATH}\`. These shared rules do not expand your role's tools, scope, or delegation authority.`;
+export const roleInstructions = role => `${sharedInstructions()}\n\n${fs.readFileSync(path.join(ROOT, 'roles', `${role}.md`), 'utf8')}`;
 export const ROLE_META = {
   coding: { description: 'Implement bounded code and tests from supplied evidence and acceptance criteria.', sandbox: 'workspace-write' },
   search: { description: 'Read-only repository exploration, source research, and evidence gathering.', sandbox: 'read-only' },
@@ -163,7 +166,7 @@ export function render(c, options = {}) {
   };
   const rows = [];
   for (const [role, meta] of Object.entries(ROLE_META)) {
-    const contract = read(path.join(ROOT, 'roles', `${role}.md`));
+    const contract = roleInstructions(role);
     for (const choice of choices.filter(choice => choice.role === role)) {
       const nativePath = `agents/task-routing/${choice.id === 'default' ? role : `${role}_${choice.id}`}.toml`;
       profile.agents[choice.nativeRole] = { description: meta.description, config_file: nativePath };
@@ -174,7 +177,7 @@ export function render(c, options = {}) {
   }
   files.set(`${c.profile}.config.toml`, '# Generated from routing.toml. Rebuild to change models or efforts.\n' + stringify(profile));
   for (const relative of ['SKILL.md', 'references/coding-quality.md', 'references/parallel-work.md', 'references/orchestration.md', 'references/research-evidence.md', 'agents/openai.yaml']) {
-    files.set(`skills/task-routing/${relative}`, read(path.join(ROOT, 'skill', relative)));
+    files.set(`skills/task-routing/${relative}`, read(path.join(ROOT, 'skill', relative)).replaceAll('{{SHARED_AGENTS_PATH}}', SHARED_AGENTS_PATH));
   }
   files.set('skills/task-routing/references/role-map.md', [
     '# Configured roles', '',
@@ -315,6 +318,9 @@ export function planInstall(files, home, options = {}) {
   }
   for (const relative of Object.keys(previous.files)) {
     if (files.has(relative)) continue;
+    // Pi no longer manages the operator's global instructions. Retire the old
+    // manifest entry without deleting or rewriting that user-maintained file.
+    if (relative === 'AGENTS.md' && options.preserveGlobalInstructions) continue;
     // Removing candidates, and a backend's explicitly declared legacy layout,
     // are the only managed deletions. Each backend restricts its own namespace
     // and requires unchanged recorded hashes; edited/unowned paths are never removed.

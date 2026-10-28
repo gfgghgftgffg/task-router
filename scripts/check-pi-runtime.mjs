@@ -103,6 +103,7 @@ export default function(pi) {
     const config = parsed.get(choice.nativeRole);
     assert.ok(config); assert.equal(config.model, undefined); assert.equal(config.thinking, undefined);
     assert.equal(config.isolated, undefined); assert.equal(config.inheritContext, false);
+    assert.equal(config.skills, true);
   }
   evidence.checks.push('Actual frontmatter parser and short-name matching for scoped local packages');
 
@@ -121,12 +122,12 @@ export default function(pi) {
     const session = { agent: { beforeToolCall: async () => { priorCalls++; return { block: false }; } }, getAllTools: () => [...definitions.values()], getToolDefinition: name => definitions.get(name), getActiveToolNames: () => active, setActiveToolsByName: names => { active = names; }, subscribe: callback => { listener = callback; } };
     const nestedCallGate = {};
     installExtensionToolScope(session, { loader: { getExtensions: () => ({ extensions }) }, toolNames: builtins, disallowedSet: new Set(PI_DENIED_TOOLS), extNames, narrowing, readmitToolNames: new Set(), nestedCallGate });
-    const expected = [...builtins, ...(role === 'search' ? ['web_access'] : [])];
+    const expected = [...builtins, 'codemode', ...(role === 'search' ? ['web_access'] : [])];
     assert.deepEqual(active.sort(), expected.sort(), `${role} exact tool set`);
     extensions[4].tools.set('late_write', definitions.get('late_write'));
     active.push('late_write'); listener({ type: 'turn_end' });
     assert.deepEqual(active.sort(), expected.sort());
-    for (const name of ['subagent', 'codemode', 'tool_search', 'mcp__test__write', 'late_write', 'web_extra']) {
+    for (const name of ['subagent', 'tool_search', 'mcp__test__write', 'late_write', 'web_extra', ...['bash', 'edit', 'write'].filter(name => !builtins.includes(name))]) {
       assert.equal(nestedCallGate.allows(name), false, `${role} nested ${name}`);
       assert.equal((await session.agent.beforeToolCall({ toolCall: { name } })).block, true);
     }
@@ -137,7 +138,7 @@ export default function(pi) {
     }
     assert.equal(priorCalls, expected.length, 'allowed calls retain the prior permission hook');
   }
-  evidence.checks.push('All five roles keep exact scope across builtin/deferred tools, late registration, direct veto and nested-call gate');
+  evidence.checks.push('All five roles allow codemode while preserving exact tool scope across late registration, direct veto, nested-call gate and permission hooks');
   console.log(JSON.stringify(evidence, null, 2));
   console.log('PI RUNTIME CHECK PASS: no models, credentials, actual children or MCP servers tested.');
 } finally {
